@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
   const meta = {
     id: d.id, filename: d.filename, mime: d.mime, size: d.size, kind,
-    summary: d.summary,
+    summary: d.summary, tag: (d as any).tag || null,
     contact: d.contact ? { id: d.contact.id, name: d.contact.name } : null,
     project: d.project ? { id: d.project.id, title: d.project.title } : null,
     createdAt: d.createdAt, updatedAt: d.updatedAt

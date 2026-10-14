@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { IconDownload, IconTrash } from "@/components/icons";
 import { ViewerBody } from "@/components/ViewerBody";
 import SlideOver from "@/components/SlideOver";
+import { FILE_TAGS, tagClasses } from "@/components/FileBits";
 
 export function useFileMeta(id: string | null) {
   const [data, setData] = useState<any>(null);
@@ -51,7 +52,7 @@ export default function FileViewer({ id, onClose, onDeleted, onRelinked }: {
         </>
       )}
       subheader={(
-        <div className="px-5 py-2 border-b border-slate-100 dark:border-zinc-800 flex gap-2 text-xs">
+        <div className="px-5 py-2 border-b border-slate-100 dark:border-zinc-800 flex gap-2 text-xs flex-wrap items-center">
           <select className="input !w-auto !py-1 text-xs" value={data?.contact?.id || ""} onChange={(e) => relink("contactId", e.target.value || null)}>
             <option value="">No person</option>
             {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -59,6 +60,15 @@ export default function FileViewer({ id, onClose, onDeleted, onRelinked }: {
           <select className="input !w-auto !py-1 text-xs" value={data?.project?.id || ""} onChange={(e) => relink("projectId", e.target.value || null)}>
             <option value="">No project</option>
             {projects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+          </select>
+          <select
+            className={`input !w-auto !py-1 text-xs font-medium ${data?.tag ? tagClasses(data.tag) + " border" : ""}`}
+            value={data?.tag || ""}
+            onChange={(e) => relink("tag", e.target.value || null)}
+            title="File tag"
+          >
+            <option value="">No tag</option>
+            {FILE_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
       )}

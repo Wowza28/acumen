@@ -9,7 +9,7 @@ export async function GET() {
   });
   return NextResponse.json(docs.map((d) => ({
     id: d.id, filename: d.filename, mime: d.mime, size: d.size,
-    summary: d.summary, contactId: d.contactId, projectId: d.projectId,
+    summary: d.summary, tag: (d as any).tag || null, contactId: d.contactId, projectId: d.projectId,
     contact: d.contact ? { id: d.contact.id, name: d.contact.name } : null,
     project: d.project ? { id: d.project.id, title: d.project.title } : null,
     createdAt: d.createdAt, updatedAt: d.updatedAt
@@ -25,6 +25,14 @@ export async function PATCH(req: NextRequest) {
   const updates: Record<string, string | null> = {};
   if (b.contactId !== undefined) updates.contactId = b.contactId || null;
   if (b.projectId !== undefined) updates.projectId = b.projectId || null;
+  if (b.tag !== undefined) {
+    const t = (b.tag || "").toString().trim();
+    const allowed = ["Invoice", "Agreement", "KYC"];
+    if (t && !allowed.includes(t)) {
+      return NextResponse.json({ error: "invalid tag — use Invoice, Agreement, or KYC" }, { status: 400 });
+    }
+    updates.tag = t || null;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json(

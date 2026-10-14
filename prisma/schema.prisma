@@ -108,6 +108,7 @@ model Document {
   path      String
   text      String     @default("")
   summary   String?
+  tag       String?
   contactId String?
   projectId String?
   createdAt DateTime   @default(now())

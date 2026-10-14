@@ -4,7 +4,7 @@ import Shell from "@/components/Shell";
 import PageHeader from "@/components/PageHeader";
 import FileViewer from "@/components/FileViewer";
 import { IconPeople, IconProject, IconFile, IconDownload, IconTrash, IconUpload } from "@/components/icons";
-import { kindOf, fmtSize } from "@/components/FileBits";
+import { kindOf, fmtSize, FILE_TAGS, tagClasses } from "@/components/FileBits";
 import PdfCanvas from "@/components/PdfCanvas";
 import DocxView from "@/components/DocxView";
 
@@ -102,6 +102,7 @@ export default function FilesPage() {
   const [typeF, setTypeF] = useState<string>("all");
   const [personF, setPersonF] = useState("");
   const [projectF, setProjectF] = useState("");
+  const [tagF, setTagF] = useState<string>("all");
   const [sel, setSel] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -142,6 +143,7 @@ export default function FilesPage() {
 
   const filtered = list.filter((d) => {
     if (typeF !== "all" && kindOf(d.mime, d.filename) !== typeF) return false;
+    if (tagF !== "all" && (d.tag || "") !== tagF) return false;
     if (personF && d.contactId !== personF) return false;
     if (projectF && d.projectId !== projectF) return false;
     if (q) {
@@ -173,6 +175,11 @@ export default function FilesPage() {
           <option value="all">All types</option>
           {TYPE_FILTERS.filter((t) => t !== "all").map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
+        <select className="input !w-auto text-xs" value={tagF} onChange={(e) => setTagF(e.target.value)}>
+          <option value="all">All tags</option>
+          <option value="">Untagged</option>
+          {FILE_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
         <select className="input !w-auto text-xs" value={personF} onChange={(e) => setPersonF(e.target.value)}>
           <option value="">All people</option>
           {people.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
@@ -189,7 +196,12 @@ export default function FilesPage() {
             <Thumb d={d} />
             <div className="min-w-0 flex-1">
               <div className="font-medium text-xs truncate" title={d.filename}>{d.filename}</div>
-              <div className="text-[10px] text-slate-400 whitespace-nowrap">{kindOf(d.mime, d.filename)} · {fmtSize(d.size)} · {new Date(d.createdAt).toLocaleDateString()}</div>
+              <div className="text-[10px] text-slate-400 whitespace-nowrap flex items-center gap-1.5">
+                <span className="truncate">{kindOf(d.mime, d.filename)} · {fmtSize(d.size)} · {new Date(d.createdAt).toLocaleDateString()}</span>
+                {d.tag && (
+                  <span className={`shrink-0 inline-flex items-center rounded-full border px-1.5 py-px text-[9px] font-semibold leading-tight ${tagClasses(d.tag)}`}>{d.tag}</span>
+                )}
+              </div>
               {(d.contact || d.project) && (
                 <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5 min-w-0">
                   {d.contact && <span className="flex items-center gap-1 truncate"><IconPeople className="shrink-0" />{d.contact.name}</span>}
