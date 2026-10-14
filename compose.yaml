@@ -1,0 +1,31 @@
+services:
+  acumen:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # When pulled from GitHub Container Registry (ghcr.io):
+    # image: ghcr.io/<your-github-username>/acumen:latest
+    container_name: acumen
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DATABASE_URL=file:/app/prisma/dev.db
+      - UPLOAD_DIR=/app/uploads
+      # You can configure credentials here or directly inside the app Settings UI:
+      # - OPENAI_API_KEY=sk-...
+      # - GEMINI_API_KEY=AIza...
+      # - TITAN_EMAIL=...
+      # - TITAN_PASSWORD=...
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - acumen_data:/app/prisma
+      - acumen_uploads:/app/uploads
+
+volumes:
+  acumen_data:
+  acumen_uploads:
+

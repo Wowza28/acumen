@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Default sitewide highlight color (orange). Each brand-* Tailwind class
+   resolves to rgb(var(--brand-NN) / <alpha>); the sidebar color picker
+   (components/ThemeColor.tsx) overrides these inline on :root at runtime
+   and layout.tsx re-applies the saved palette before first paint. */
+:root {
+  --brand-50: 240 245 255;
+  --brand-100: 233 213 255;
+  --brand-200: 216 180 254;
+  --brand-300: 192 132 252;
+  --brand-400: 168 85 247;
+  --brand-500: 139 92 246;
+  --brand-600: 124 58 237;
+  --brand-700: 109 40 217;
+  --brand-800: 91 33 182;
+  --brand-900: 76 29 149;
+  --brand-950: 46 16 101;
+}
+
+
+body { @apply bg-white text-slate-900 dark:bg-zinc-950 dark:text-zinc-100; }
+.card { @apply bg-white border border-slate-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm dark:bg-zinc-900; }
+.btn { @apply px-4 py-2 rounded-xl bg-slate-900 text-white text-sm hover:bg-slate-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300; }
+.btn-ghost { @apply px-3 py-1.5 rounded-lg text-sm hover:bg-slate-100 dark:hover:bg-zinc-800; }
+.icon-btn { @apply p-2 rounded-xl hover:bg-slate-100 text-slate-500 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 disabled:opacity-50; }
+.input { @apply w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-100 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 dark:focus:ring-brand-500/25; }
+.navitem { @apply flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-100; }
+.navitem-active { @apply bg-brand-500/10 text-brand-700 font-semibold hover:bg-brand-500/15 dark:bg-brand-500/15 dark:text-brand-300 dark:hover:bg-brand-500/20; }
+.navitem-active svg { @apply stroke-[2.2]; }
+.chat-bubble-user { @apply bg-zinc-500 text-white rounded-2xl px-4 py-2 max-w-[85%] ml-auto dark:bg-zinc-700 dark:text-zinc-50; }
+.chat-bubble-ai { @apply px-1 py-1 max-w-full text-sm text-slate-900 dark:text-zinc-100; }
+.table-row { @apply border-b border-slate-100 dark:border-zinc-800/80 hover:bg-brand-500/[0.04] dark:hover:bg-brand-500/[0.07]; }
+.tab-btn { @apply px-3 py-1.5 rounded-lg text-sm text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800; }
+.tab-btn-active { @apply bg-brand-500/10 text-brand-700 font-semibold dark:bg-brand-500/15 dark:text-brand-300; }
+
+/* pdf.js selectable text layer (styles shipped in-project) */
+.textLayer {
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+}
+.textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+.textLayer span.markedContent { top: 0; height: 0; }
+.textLayer ::selection { background: rgba(0, 100, 255, 0.35); }
+
+/* docx-preview rendered pages (library injects page geometry/styles;
+   we only add chrome around it) */
+.docx-host { color: #111; }
+.docx-host section {
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
+  margin: 0 auto 14px auto;
+  background: white;
+}
+.docx-host img { max-width: 100%; }
+
+
+
+/* Stylized site name: thin, wide-kerned, sans-serif, no crossbar on the A */
+.site-name {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  font-weight: 200;
+  letter-spacing: 0.12em;
+}

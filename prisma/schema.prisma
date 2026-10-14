@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Contact {
+  id               String            @id @default(cuid())
+  name             String
+  email            String?
+  phone            String?
+  company          String?
+  role             String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  address          String?
+  photo            String?
+  contactEmails    ContactEmail[]
+  contactPhones    ContactPhone[]
+  documents        Document[]
+  eventLinks       EventLink[]
+  notes            Note[]
+  pocOf            Project[]         @relation("ProjectPOC")
+  projects         ProjectContact[]
+  emails           SyncedEmail[]
+  tasks            Task[]
+  transactionLinks TransactionLink[]
+}
+
+model ContactEmail {
+  id        String   @id @default(cuid())
+  contactId String
+  value     String
+  label     String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+}
+
+model ContactPhone {
+  id        String   @id @default(cuid())
+  contactId String
+  value     String
+  label     String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+}
+
+model Project {
+  id                 String            @id @default(cuid())
+  title              String
+  company            String?
+  status             String            @default("planned")
+  inceptionAt        DateTime?
+  nextDeadline       DateTime?
+  pocId              String?
+  logo               String?
+  description        String?
+  projectedRevenue   Float?
+  revenue            Float?
+  expectedCompletion DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  documents          Document[]
+  eventLinks         EventLink[]
+  notes              Note[]
+  poc                Contact?          @relation("ProjectPOC", fields: [pocId], references: [id])
+  contacts           ProjectContact[]
+  tasks              Task[]
+  transactionLinks   TransactionLink[]
+}
+
+model ProjectContact {
+  projectId String
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, contactId])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  title     String   @default("Untitled")
+  body      String   @default("")
+  contactId String?
+  projectId String?
+  via       String   @default("chat")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project? @relation(fields: [projectId], references: [id])
+  contact   Contact? @relation(fields: [contactId], references: [id])
+}
+
+model Document {
+  id        String     @id @default(cuid())
+  filename  String
+  mime      String     @default("application/octet-stream")
+  size      Int        @default(0)
+  path      String
+  text      String     @default("")
+  summary   String?
+  contactId String?
+  projectId String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  chunks    DocChunk[]
+  project   Project?   @relation(fields: [projectId], references: [id])
+  contact   Contact?   @relation(fields: [contactId], references: [id])
+}
+
+model DocChunk {
+  id         String   @id @default(cuid())
+  documentId String
+  ord        Int
+  text       String
+  embedding  String   @default("[]")
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  description String    @default("")
+  status      String    @default("todo")
+  priority    String    @default("medium")
+  dueAt       DateTime?
+  contactId   String?
+  projectId   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  project     Project?  @relation(fields: [projectId], references: [id])
+  contact     Contact?  @relation(fields: [contactId], references: [id])
+}
+
+model Chat {
+  id        String        @id @default(cuid())
+  title     String        @default("New chat")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+  chatId    String?
+  chat      Chat?    @relation(fields: [chatId], references: [id], onDelete: Cascade)
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model Transaction {
+  id               String            @id @default(cuid())
+  currency         String
+  transactionType  String
+  transactionDate  DateTime
+  referenceNumber  String            @default("")
+  description      String            @default("")
+  amount           Float
+  balance          Float?
+  notes            String?
+  createdAt        DateTime          @default(now())
+  transactionLinks TransactionLink[]
+
+  @@index([transactionDate])
+  @@index([referenceNumber])
+}
+
+model VatExclusion {
+  id        String   @id @default(cuid())
+  side      String
+  pattern   String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([side])
+}
+
+model TransactionLink {
+  id            String      @id @default(cuid())
+  transactionId String
+  contactId     String?
+  projectId     String?
+  createdAt     DateTime    @default(now())
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  project       Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contact       Contact?    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([transactionId, contactId, projectId])
+  @@index([transactionId])
+  @@index([contactId])
+  @@index([projectId])
+}
+
+model SyncedEmail {
+  id        String    @id @default(cuid())
+  gmailId   String    @unique
+  threadId  String?
+  from      String?
+  to        String?
+  subject   String?
+  snippet   String?
+  body      String?
+  date      DateTime?
+  contactId String?
+  createdAt DateTime  @default(now())
+  contact   Contact?  @relation(fields: [contactId], references: [id])
+}
+
+model TitanAccount {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EventLink {
+  id           String   @id @default(cuid())
+  eventUid     String
+  accountEmail String   @default("")
+  eventTitle   String   @default("")
+  eventStart   String   @default("")
+  eventEnd     String   @default("")
+  contactId    String?
+  projectId    String?
+  createdAt    DateTime @default(now())
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contact      Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([accountEmail, eventUid, contactId, projectId])
+  @@index([eventUid])
+  @@index([accountEmail])
+  @@index([contactId])
+  @@index([projectId])
+}
