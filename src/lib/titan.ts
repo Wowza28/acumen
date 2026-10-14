@@ -350,6 +350,7 @@ export async function resolveAttachmentFiles(
   uploadDir?: string
 ): Promise<ResolvedAttachment[]> {
   const dir = uploadDir || process.env.UPLOAD_DIR || "./uploads";
+  const { resolveStoredPath } = await import("./filePaths");
   const out: ResolvedAttachment[] = [];
   const seen = new Set<string>();
   if (!names.length) return out;
@@ -375,7 +376,7 @@ export async function resolveAttachmentFiles(
     let best: { score: number; name: string; mime: string; path: string } | null = null;
     for (const d of docs) {
       const s = scoreAttachMatch(q, d.id, d.filename);
-      if (!best || s > best.score) best = { score: s, name: d.filename, mime: d.mime || "application/octet-stream", path: d.path };
+      if (!best || s > best.score) best = { score: s, name: d.filename, mime: d.mime || "application/octet-stream", path: resolveStoredPath(d.path) };
     }
     if (best && best.score >= 45) {
       const key = best.path.toLowerCase();

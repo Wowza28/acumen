@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { resolveStoredPath } from "@/lib/filePaths";
 import fs from "fs/promises";
 
 export async function GET(req: NextRequest) {
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
   const d = await prisma.document.findUnique({ where: { id } });
   if (!d) return NextResponse.json({ error: "not found" }, { status: 404 });
   try {
-    const buf = await fs.readFile(d.path);
+    const buf = await fs.readFile(resolveStoredPath(d.path));
     return new NextResponse(buf as any, {
       headers: {
         "Content-Type": d.mime || "application/octet-stream",

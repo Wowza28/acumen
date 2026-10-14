@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { resolveStoredPath } from "@/lib/filePaths";
 import fs from "fs/promises";
 
 // GET /api/files/preview?id= — preview metadata for the slide-over viewer.
@@ -32,14 +33,15 @@ export async function GET(req: NextRequest) {
   };
 
   try {
+    const p = resolveStoredPath(d.path);
     if (kind === "sheet") {
       if (name.endsWith(".csv")) {
-        const text = await fs.readFile(d.path, "utf8");
+        const text = await fs.readFile(p, "utf8");
         const rows = text.split(/\r?\n/).slice(0, 200).map((l) => l.split(","));
         return NextResponse.json({ ...meta, sheets: [{ name: d.filename, rows }] });
       }
       const XLSX = await import("xlsx");
-      const buf = await fs.readFile(d.path);
+      const buf = await fs.readFile(p);
       const wb = XLSX.read(buf, { type: "buffer" });
       const sheets = wb.SheetNames.slice(0, 10).map((s) => ({
         name: s,
@@ -50,7 +52,7 @@ export async function GET(req: NextRequest) {
     if (kind === "text") {
       // Read plain text (up to 1 MB) for inline preview in the viewer.
       const MAX = 1024 * 1024;
-      const buf = await fs.readFile(d.path);
+      const buf = await fs.readFile(p);
       const text = buf.subarray(0, MAX).toString("utf8");
       return NextResponse.json({ ...meta, text, textTruncated: buf.length > MAX });
     }

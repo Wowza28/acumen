@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { resolveStoredPath } from "@/lib/filePaths";
 import fs from "fs/promises";
 
 export async function GET() {
@@ -55,6 +56,6 @@ export async function DELETE(req: NextRequest) {
   if (!d) return NextResponse.json({ error: "not found" }, { status: 404 });
   await prisma.docChunk.deleteMany({ where: { documentId: id } });
   await prisma.document.delete({ where: { id } });
-  try { await fs.unlink(d.path); } catch {}
+  try { await fs.unlink(resolveStoredPath(d.path)); } catch {}
   return NextResponse.json({ ok: true });
 }
