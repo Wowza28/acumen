@@ -11,8 +11,8 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
-      - DATABASE_URL=file:/app/prisma/dev.db
-      - UPLOAD_DIR=/app/uploads
+      - DATABASE_URL=file:/data/acumen.db
+      - UPLOAD_DIR=/data/uploads
       # You can configure credentials here or directly inside the app Settings UI:
       # - OPENAI_API_KEY=sk-...
       # - GEMINI_API_KEY=AIza...
@@ -22,8 +22,11 @@ services:
       - path: .env
         required: false
     volumes:
-      - acumen_data:/app/prisma
-      - acumen_uploads:/app/uploads
+      # Data lives under /data so it never shadows the schema.prisma baked
+      # into the image at /app/prisma (that shadowing silently broke `db push`
+      # schema updates). Existing dev.db/uploads auto-migrate on first start.
+      - acumen_data:/data
+      - acumen_uploads:/data/uploads
 
 volumes:
   acumen_data:

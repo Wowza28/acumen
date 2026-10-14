@@ -38,12 +38,16 @@ RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=8000
-ENV DATABASE_URL="file:/app/prisma/dev.db"
-ENV UPLOAD_DIR="/app/uploads"
+# Stateful data lives OUTSIDE /app/prisma on purpose: mounting a volume at
+# /app/prisma would shadow the schema.prisma baked into the image, so
+# `prisma db push` would run against a stale schema and skip new columns.
+ENV DATA_DIR="/data"
+ENV DATABASE_URL="file:/data/acumen.db"
+ENV UPLOAD_DIR="/data/uploads"
 
 # Prepare directories and permissions for the built-in node user (UID 1000)
-RUN mkdir -p /app/prisma /app/uploads && \
-    chown -R node:node /app
+RUN mkdir -p /data /data/uploads /app/uploads && \
+    chown -R node:node /app /data
 
 COPY --chown=node:node --from=builder /app/public ./public
 COPY --chown=node:node --from=builder /app/.next ./.next
