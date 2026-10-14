@@ -11,8 +11,8 @@ services:
       - "8000:8000"
     environment:
       - PORT=8000
-      - DATABASE_URL=file:/data/acumen.db
-      - UPLOAD_DIR=/data/uploads
+      - DATABASE_URL=file:/app/prisma/dev.db
+      - UPLOAD_DIR=/app/uploads
       # You can configure credentials here or directly inside the app Settings UI:
       # - OPENAI_API_KEY=sk-...
       # - GEMINI_API_KEY=AIza...
@@ -22,11 +22,13 @@ services:
       - path: .env
         required: false
     volumes:
-      # Data lives under /data so it never shadows the schema.prisma baked
-      # into the image at /app/prisma (that shadowing silently broke `db push`
-      # schema updates). Existing dev.db/uploads auto-migrate on first start.
-      - acumen_data:/data
-      - acumen_uploads:/data/uploads
+      # These mounts hold the live database + uploaded files. The schema file
+      # itself is baked into the image at /app/schema.prisma (see Dockerfile)
+      # so the volume can never shadow it and block schema updates. Do NOT
+      # change these paths without also updating your Dockge stack — Dockge
+      # keeps its own copy of this file and will not pick up changes here.
+      - acumen_data:/app/prisma
+      - acumen_uploads:/app/uploads
 
 volumes:
   acumen_data:

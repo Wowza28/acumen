@@ -64,15 +64,17 @@ To configure your API keys (OpenAI / Gemini / Titan), you can create a `.env` fi
 ### Build and Run Manually
 ```bash
 docker build -t acumen .
-docker run -d -p 8000:8000 -v acumen_data:/data -v acumen_uploads:/data/uploads acumen
+docker run -d -p 8000:8000 -v acumen_data:/app/prisma -v acumen_uploads:/app/uploads acumen
 ```
 
-> Persistence note: always mount the SAME volumes at `/data` + `/data/uploads`
-> (whether via compose or `docker run`). Mounting at `/app/prisma` hides the
-> schema file baked into the image and breaks automatic schema updates; using
-> different volume names (compose prefixes them, e.g. `acumen_acumen_data`)
-> silently starts you on an empty volume. Pick one method and stick to it —
-> `docker compose` is recommended.
+> Persistence notes:
+> - These volume paths (`/app/prisma` + `/app/uploads`) are canonical. **Do not
+>   change them** without also updating every deployed stack file (e.g. Dockge
+>   keeps its own copy of `compose.yaml` — editing the repo file alone does
+>   nothing to a Dockge-managed container).
+> - Schema updates are applied automatically on every container start via
+>   `prisma db push` against the schema baked into the image — no manual
+>   migration step needed after pulling a new image.
 
 ## Switch to Postgres + pgvector later
 Change prisma provider to postgresql, DATABASE_URL to Supabase, move DocChunk.embedding to `vector` type. Code in `src/lib/agent2.ts` already isolates similarity — swap cosine loop for `<=>` query.
