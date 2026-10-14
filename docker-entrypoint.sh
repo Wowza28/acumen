@@ -14,8 +14,10 @@ export UPLOAD_DIR
 mkdir -p "$(dirname "${DATABASE_URL:-file:/app/prisma/dev.db}" | sed 's|^file:||')" "$UPLOAD_DIR" 2>/dev/null || true
 mkdir -p /app/prisma "$UPLOAD_DIR"
 
-# Legacy /data layout (briefly shipped): if the active DB file is missing but
-# a database exists under /data, adopt it so no data is orphaned.
+# Legacy layouts (named volumes / /data paths briefly shipped): if the active
+# DB file is missing but a database exists in a legacy location, adopt it so
+# no data is orphaned. Only runs when the bind-mounted DB is absent, so it
+# never overwrites live data.
 case "${DATABASE_URL:-}" in
   file:*)
     ACTIVE_DB="$(printf '%s' "$DATABASE_URL" | sed 's|^file:||')"

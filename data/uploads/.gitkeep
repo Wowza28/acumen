@@ -1,0 +1,1 @@
+# Bind-mounted uploads live here (compose.yaml: ./data/uploads:/app/uploads).

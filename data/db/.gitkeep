@@ -1,0 +1,1 @@
+# Bind-mounted SQLite database lives here (compose.yaml: ./data/db:/app/prisma).

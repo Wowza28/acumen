@@ -52,7 +52,7 @@ All providers use the same tool-calling agent loop. Restart the server after cha
 
 ### Using Docker Compose (default port 8000)
 ```bash
-# Start ACUMEN on port 8000 (database & uploads persist in volumes)
+# Start ACUMEN on port 8000 (database & uploads persist in ./data bind mounts)
 docker compose up -d
 
 # Open in your browser:
@@ -64,14 +64,20 @@ To configure your API keys (OpenAI / Gemini / Titan), you can create a `.env` fi
 ### Build and Run Manually
 ```bash
 docker build -t acumen .
-docker run -d -p 8000:8000 -v acumen_data:/app/prisma -v acumen_uploads:/app/uploads acumen
+mkdir -p data/db data/uploads
+docker run -d -p 8000:8000 -v ./data/db:/app/prisma -v ./data/uploads:/app/uploads acumen
 ```
 
 > Persistence notes:
-> - These volume paths (`/app/prisma` + `/app/uploads`) are canonical. **Do not
->   change them** without also updating every deployed stack file (e.g. Dockge
->   keeps its own copy of `compose.yaml` — editing the repo file alone does
->   nothing to a Dockge-managed container).
+> - ALL persistent data lives in `./data/` next to `compose.yaml` via bind
+>   mounts (`./data/db` = SQLite database, `./data/uploads` = uploaded files).
+>   The container-side paths (`/app/prisma` + `/app/uploads`) are canonical —
+>   **do not change them** without also updating every deployed stack file
+>   (e.g. Dockge keeps its own copy of `compose.yaml` — editing the repo file
+>   alone does nothing to a Dockge-managed container; paste the updated file
+>   into Dockge).
+> - `data/` contents are git-ignored (only `.gitkeep` markers are tracked), so
+>   your CRM data is never committed.
 > - Schema updates are applied automatically on every container start via
 >   `prisma db push` against the schema baked into the image — no manual
 >   migration step needed after pulling a new image.

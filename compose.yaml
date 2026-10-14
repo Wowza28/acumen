@@ -22,15 +22,13 @@ services:
       - path: .env
         required: false
     volumes:
-      # These mounts hold the live database + uploaded files. The schema file
-      # itself is baked into the image at /app/schema.prisma (see Dockerfile)
-      # so the volume can never shadow it and block schema updates. Do NOT
-      # change these paths without also updating your Dockge stack — Dockge
-      # keeps its own copy of this file and will not pick up changes here.
-      - acumen_data:/app/prisma
-      - acumen_uploads:/app/uploads
-
-volumes:
-  acumen_data:
-  acumen_uploads:
+      # Bind mounts: ALL persistent data lives in ./data next to this file.
+      #   ./data/db      -> SQLite database (dev.db)
+      #   ./data/uploads -> uploaded files, contact photos, project logos
+      # The schema file itself is baked into the image at /app/schema.prisma
+      # (see Dockerfile) so the db mount can never shadow it and block
+      # schema updates. NOTE: Dockge keeps its own copy of this file — after
+      # pulling repo changes, paste the updated compose file into Dockge too.
+      - ./data/db:/app/prisma
+      - ./data/uploads:/app/uploads
 

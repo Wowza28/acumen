@@ -18,6 +18,14 @@ dist/
 prisma/*.db*
 uploads/*
 !uploads/.gitkeep
+# Docker bind-mount data (./data next to compose.yaml): structure is tracked,
+# contents never are. (Trailing "/*" keeps the .gitkeep markers addable while
+# ignoring real db/upload files.)
+data/db/*
+!data/db/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
+!data/.gitkeep
 
 # Environment files & secrets
 .env
