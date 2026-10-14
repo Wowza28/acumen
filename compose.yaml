@@ -1,10 +1,10 @@
 services:
   acumen:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # When pulled from GitHub Container Registry (ghcr.io):
-    # image: ghcr.io/<your-github-username>/acumen:latest
+    image: ghcr.io/wowza28/acumen:latest
+    # To build locally instead of pulling the pre-built image:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: acumen
     restart: unless-stopped
     ports:
