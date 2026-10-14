@@ -3,7 +3,7 @@
 # ==========================================
 
 # 1. Dependencies Stage
-FROM node:20-bookworm-slim AS deps
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -15,7 +15,7 @@ COPY scripts ./scripts/
 RUN npm ci
 
 # 2. Builder Stage
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -30,7 +30,7 @@ ENV NODE_ENV=production
 RUN npm run build
 
 # 3. Production Runner Stage
-FROM node:20-bookworm-slim AS runner
+FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
