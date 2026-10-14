@@ -61,6 +61,7 @@ export default function SlideOver({
         className={`fixed inset-0 z-40 bg-slate-900/30 dark:bg-black/50 transition-opacity duration-200 ${open ? "opacity-100" : "opacity-0 pointer-events-none"}`}
       />
       <aside
+        data-file-viewer
         aria-hidden={!open}
         className={`fixed top-0 right-0 z-50 h-full w-full ${width} bg-white dark:bg-zinc-950 border-l border-slate-200 dark:border-zinc-800 shadow-2xl transition-transform duration-200 flex flex-col ${open ? "translate-x-0" : "translate-x-full"}`}
       >

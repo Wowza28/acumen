@@ -19,7 +19,7 @@ export default function AttachButton({ onDone }: { onDone: (msg: string) => void
   }
   return (
     <>
-      <input ref={ref} type="file" className="hidden" onChange={upload} accept=".pdf,.docx,.txt,.md,.csv" />
+      <input ref={ref} type="file" className="hidden" onChange={upload} />
       <button className="icon-btn" title="Attach document" disabled={busy} onClick={() => ref.current?.click()}>
         {busy ? <span className="text-xs">…</span> : <IconClip />}
       </button>

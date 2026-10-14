@@ -105,23 +105,39 @@ export default function FilesPage() {
   const [tagF, setTagF] = useState<string>("all");
   const [sel, setSel] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepth = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function upload(e: any) {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  async function uploadFiles(files: FileList | File[] | null | undefined) {
+    const arr = files ? Array.from(files) : [];
+    if (!arr.length) return;
     setUploading(true);
+    setUploadErrors([]);
+    const errs: string[] = [];
     try {
-      const fd = new FormData();
-      fd.append("file", f);
-      const r = await fetch("/api/docs/upload", { method: "POST", body: fd });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || j.error) alert(j.error || "Upload failed.");
+      for (const f of arr) {
+        try {
+          const fd = new FormData();
+          fd.append("file", f);
+          const r = await fetch("/api/docs/upload", { method: "POST", body: fd });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || j.error) errs.push(`${f.name}: ${j.error || "Upload failed."}`);
+        } catch (e: any) {
+          errs.push(`${f.name}: ${e?.message || "Upload failed."}`);
+        }
+      }
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
       load();
     }
+    setUploadErrors(errs);
+  }
+
+  async function upload(e: any) {
+    await uploadFiles(e.target.files);
   }
 
   async function load() {
@@ -129,6 +145,51 @@ export default function FilesPage() {
     setList(Array.isArray(j) ? j : []);
   }
   useEffect(() => { load(); }, []);
+
+  // Page-wide drag & drop: window listeners so the drop target is the whole
+  // content area (including empty space around/below the grid), not just the
+  // cards. Guarded to Files drags only; the slide-over viewer is excluded so
+  // dropping a file onto an open viewer doesn't trigger an upload.
+  const uploadFilesRef = useRef(uploadFiles);
+  uploadFilesRef.current = uploadFiles;
+  useEffect(() => {
+    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types || []).includes("Files");
+    const inViewer = (e: Event) => (e.target as HTMLElement | null)?.closest?.("[data-file-viewer]") != null;
+    const onDragEnter = (e: DragEvent) => {
+      if (!hasFiles(e) || inViewer(e)) return;
+      e.preventDefault();
+      dragDepth.current += 1;
+      setDragOver(true);
+    };
+    const onDragOver = (e: DragEvent) => {
+      if (!hasFiles(e) || inViewer(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    };
+    const onDragLeave = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setDragOver(false);
+    };
+    const onDrop = (e: DragEvent) => {
+      if (!hasFiles(e) || inViewer(e)) return;
+      e.preventDefault();
+      dragDepth.current = 0;
+      setDragOver(false);
+      if (e.dataTransfer?.files?.length) uploadFilesRef.current(e.dataTransfer.files);
+    };
+    window.addEventListener("dragenter", onDragEnter);
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("dragleave", onDragLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onDragEnter);
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("dragleave", onDragLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, []);
 
   const people = useMemo(() => {
     const m = new Map<string, string>();
@@ -161,10 +222,15 @@ export default function FilesPage() {
 
   return (
     <Shell wide>
+      {dragOver && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 pointer-events-none">
+          <div className="card text-sm font-medium">Drop files to upload</div>
+        </div>
+      )}
       <PageHeader icon="files" title="Files" count={filtered.length} right={
         <div className="flex items-center gap-2">
           <input className="input !w-56" placeholder="Search filename…" value={q} onChange={(e) => setQ(e.target.value)} />
-          <input ref={fileRef} type="file" className="hidden" accept=".pdf,.docx,.txt,.md,.csv" onChange={upload} />
+          <input ref={fileRef} type="file" className="hidden" multiple onChange={upload} />
           <button className="btn !py-1.5 flex items-center gap-1.5" disabled={uploading} onClick={() => fileRef.current?.click()} title="Upload a file">
             <IconUpload /> {uploading ? "Uploading…" : "Upload File"}
           </button>
@@ -216,7 +282,12 @@ export default function FilesPage() {
           </div>
         ))}
       </div>
-      {!filtered.length && <div className="card text-sm text-slate-500 mt-3">No files yet — attach one via the chat paperclip.</div>}
+      {!filtered.length && <div className="card text-sm text-slate-500 mt-3">No files yet — upload one above or drag & drop files anywhere on this page.</div>}
+      {!!uploadErrors.length && (
+        <div className="card text-sm text-red-500 mt-3">
+          {uploadErrors.map((e, i) => <div key={i}>{e}</div>)}
+        </div>
+      )}
       <FileViewer id={sel} onClose={() => setSel(null)} onDeleted={() => { setSel(null); load(); }} onRelinked={load} />
     </Shell>
   );
