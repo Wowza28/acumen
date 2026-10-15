@@ -42,13 +42,12 @@ export default function ProjectsPage() {
 
   return (
     <Shell wide>
-      <PageHeader icon="projects" title="Projects" count={filtered.length} right={
-        <div className="flex items-center gap-2">
-          <input className="input !w-56" placeholder="Search projects…" value={q} onChange={(e) => setQ(e.target.value)} />
-          <button className="btn !py-1.5 flex items-center gap-1.5" onClick={() => setAdding(true)}><span className="text-base leading-none">+</span> Add</button>
-        </div>
-      } />
-      <div className="card !p-0 overflow-x-auto">
+      <PageHeader icon="projects" title="Projects" count={filtered.length}
+        search={{ value: q, onChange: setQ, placeholder: "Search projects…" }}
+        actions={
+          <button className="btn !py-1.5 flex items-center justify-center gap-1.5 col-span-2" onClick={() => setAdding(true)}><span className="text-base leading-none">+</span> Add</button>
+        } />
+      <div className="card !p-0 overflow-x-auto hidden md:block">
         <table className="w-full text-sm">
           <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
             <th className="px-2 py-2 font-medium w-0">Logo</th>
@@ -77,8 +76,38 @@ export default function ProjectsPage() {
             ))}
           </tbody>
         </table>
-        {!filtered.length && <div className="p-4 text-sm text-slate-500">{list.length ? "No projects match your search." : "No projects yet."}</div>}
+        
       </div>
+      <div className="md:hidden space-y-3">
+        {filtered.map((p) => (
+          <div
+            key={p.id}
+            className="card !p-4 cursor-pointer transition hover:shadow-md mb-3"
+            onClick={() => router.push(`/projects/${p.id}`)}
+          >
+            <div className="flex items-center gap-3 text-left">
+              <span onClick={(e) => e.stopPropagation()}>
+                <ProjectLogo
+                  projectId={p.id}
+                  logoUrl={p.logo ? `/api/projects/logo?id=${p.id}` : null}
+                  compact
+                  onUploaded={load}
+                />
+              </span>
+              <span className="text-lg font-semibold leading-tight truncate min-w-0 flex-1">{p.title}</span>
+              <span className="shrink-0"><ProjectStatusTag status={p.status} /></span>
+            </div>
+            <div className="text-left text-sm text-slate-500 dark:text-zinc-400 mt-3 leading-relaxed">
+              <div>Company: {p.company || "—"}</div>
+              <div>Point of Contact: {p.poc?.name || "—"}</div>
+              <div>Expected Revenue: {fmtAED(p.projectedRevenue)}</div>
+              <div>Next Deadline: {fmtDate(nextDeadline(p))}</div>
+              <div>Expected Completion: {fmtDate(p.expectedCompletion)}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!filtered.length && <div className="p-4 text-sm text-slate-500">{list.length ? "No projects match your search." : "No projects yet."}</div>}
       {adding && <ProjectEditor onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }} />}
     </Shell>
   );

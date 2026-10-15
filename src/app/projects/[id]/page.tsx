@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Shell from "@/components/Shell";
 import { IconBack, IconTask, IconNote, IconPeople, IconFile, IconTrash, IconPencil, IconMeeting, IconAccounts } from "@/components/icons";
@@ -11,6 +11,7 @@ import FileViewer from "@/components/FileViewer";
 import ProjectLogo from "@/components/ProjectLogo";
 import EventDrawer, { type Ev } from "@/components/EventDrawer";
 import LinkedTransactionsTable, { type LinkedTx } from "@/components/LinkedTransactions";
+import TransactionDrawer from "@/components/TransactionDrawer";
 
 function fmtDate(d?: string | null) {
   if (!d) return "—";
@@ -44,18 +45,9 @@ function toDateInput(d?: string | null): string {
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 }
 
-function Section({ icon, title, count, children }: { icon: React.ReactNode; title: string; count: number; children: React.ReactNode }) {
-  return (
-    <div className="card mb-4">
-      <h2 className="text-base font-semibold flex items-center gap-2 mb-3">
-        {icon} {title} <span className="text-slate-400 font-normal text-sm">({count})</span>
-      </h2>
-      {children}
-    </div>
-  );
-}
-
 const Empty = ({ what }: { what: string }) => <div className="text-sm text-slate-400">No {what} linked.</div>;
+
+const PROJECT_TABS = ["People", "Tasks", "Notes", "Files", "Events", "Transactions"] as const;
 
 function ProjectDetailInner() {
   const params = useParams();
@@ -67,10 +59,25 @@ function ProjectDetailInner() {
   const [editNoteId, setEditNoteId] = useState<string | null>(null);
   const [viewFileId, setViewFileId] = useState<string | null>(null);
   const [events, setEvents] = useState<Ev[]>([]);
+  const [tab, setTab] = useState<"People" | "Tasks" | "Notes" | "Files" | "Events" | "Transactions">("People");
+  const cardRef = useRef<HTMLDivElement>(null);
+  // On tab click, scroll the tabs card to the top of the viewport so the
+  // tab bar stays pinned while the user browses (mobile-only; PC layout
+  // is short enough that it would just jump the page around).
+  const selectTab = useCallback((t: "People" | "Tasks" | "Notes" | "Files" | "Events" | "Transactions") => {
+    setTab(t);
+    if (window.innerWidth < 768) {
+      requestAnimationFrame(() => {
+        cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, []);
   const [viewEvent, setViewEvent] = useState<Ev | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>({});
   const [transactions, setTransactions] = useState<LinkedTx[]>([]);
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const [allContacts, setAllContacts] = useState<any[]>([]);
   const [linkBusy, setLinkBusy] = useState(false);
 
@@ -85,11 +92,15 @@ function ProjectDetailInner() {
     // Transactions DIRECTLY linked to this project (never via people).
     fetch(`/api/transaction-links?projectId=${id}`).then((r) => r.json()).then((tj: any) => {
       if (Array.isArray(tj?.transactions)) {
+        setAllTransactions(tj.transactions);
         setTransactions(tj.transactions.map((t: any) => ({
           id: t.id, description: t.description, amount: t.amount,
           currency: t.currency, transactionDate: t.transactionDate,
         })));
-      } else setTransactions([]);
+      } else {
+        setAllTransactions([]);
+        setTransactions([]);
+      }
     }).catch(() => {});
     fetch("/api/contacts").then((r) => r.json()).then((cj: any) => {
       if (Array.isArray(cj)) setAllContacts(cj);
@@ -104,6 +115,10 @@ function ProjectDetailInner() {
         setP((prev: any) => prev ? { ...prev, revenue: Number(rj.revenue) } : prev);
       }
     }).catch(() => {});
+  }
+  function handleTransactionClick(t: LinkedTx) {
+    const full = allTransactions.find((tx) => tx.id === t.id) || null;
+    setSelectedTransaction(full);
   }
   useEffect(() => { load(); }, [id]);
 
@@ -365,9 +380,34 @@ function ProjectDetailInner() {
           </div>
         </div>
       </div>
-      <Section icon={<IconTask />} title="Tasks" count={tasks.length}>
-        {tasks.length ? (
-          <div className="card !p-0 overflow-x-auto">
+      {/* Card wrapper matching the person detail page — visible on mobile only (desktop keeps its flat layout). */}
+      <div ref={cardRef} className="card md:!p-0 md:!bg-transparent md:!border-0 md:!rounded-none md:!shadow-none">
+      <div className="grid grid-cols-2 gap-1 mb-3 md:flex md:gap-1">
+        {PROJECT_TABS.map((t) => (
+          <button key={t} onClick={() => selectTab(t)} className={`tab-btn text-center ${tab === t ? "tab-btn-active" : ""}`}>{t}</button>
+        ))}
+      </div>
+      <div className="text-sm flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
+        {tab === "Tasks" && (
+          <>
+            {tasks.length === 0 && <span className="text-slate-400">No tasks linked.</span>}
+            {tasks.length > 0 && (
+              <>
+                <div className="flex flex-col gap-2 md:hidden">
+                  {tasks.map((t) => (
+                    <div key={t.id} onClick={() => setEditTaskId(t.id)} className="card !p-3 cursor-pointer">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium truncate">{t.title}</span>
+                        <span className="text-xs text-slate-500 dark:text-zinc-400 whitespace-nowrap">{fmtDue(t.dueAt)}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        <Tag v={t.status} map={STATUS_STYLE} />
+                        <Tag v={t.priority} map={PRIORITY_STYLE} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden md:block card !p-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
                 <th className="px-4 py-2 font-medium">Title</th><th className="px-4 py-2 font-medium">Status</th>
@@ -385,134 +425,202 @@ function ProjectDetailInner() {
               </tbody>
             </table>
           </div>
-        ) : <Empty what="tasks" />}
-      </Section>
+              </>
+            )}
+          </>
+        )}
 
-      <Section icon={<IconNote />} title="Notes" count={notes.length}>
-        {notes.length ? (
-          <div className="card !p-0 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
-                <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Date</th>
-              </tr></thead>
-              <tbody>
-                {notes.map((n: any) => (
-                  <tr key={n.id} onClick={() => setEditNoteId(n.id)} className="table-row cursor-pointer">
-                    <td className="px-4 py-2">
-                      <div className="font-medium">{n.title || "Untitled"}</div>
-                      <div className="text-xs text-slate-400 truncate max-w-[52ch]">{(n.body || "").slice(0, 120)}</div>
-                    </td>
-                    <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">
-                      {new Date(n.updatedAt || n.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <Empty what="notes" />}
-      </Section>
-      <Section icon={<IconMeeting />} title="Events" count={events.length}>
-        {events.length ? (
-          <div className="card !p-0 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
-                <th className="px-4 py-2 font-medium">Meeting</th><th className="px-4 py-2 font-medium">When</th>
-              </tr></thead>
-              <tbody>
-                {events.map((e) => (
-                  <tr key={e.uid} onClick={() => setViewEvent(e)} className="table-row cursor-pointer">
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <IconMeeting className="shrink-0 text-slate-400" />
-                        <span className="font-medium truncate">{e.summary || "(no title)"}</span>
-                        {e.auto && <span className="text-[10px] uppercase tracking-wide text-brand-500 shrink-0">auto</span>}
-                      </div>
-                      {e.location && <div className="text-xs text-slate-400 truncate max-w-[52ch]">{e.location}</div>}
-                    </td>
-                    <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">{fmtEvDate(e)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <Empty what="meetings" />}
-      </Section>
+        {tab === "Notes" && (
+          <>
+            {notes.length === 0 && <span className="text-slate-400">No notes linked.</span>}
+            <div className="md:hidden flex flex-col gap-2">
+              {notes.map((n: any) => (
+                <button key={n.id} onClick={() => setEditNoteId(n.id)} className="card !p-3 text-left">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="font-medium truncate">{n.title || "(untitled)"}</div>
+                    <div className="text-[11px] text-slate-400 shrink-0">{new Date(n.updatedAt || n.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</div>
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-zinc-400 line-clamp-2 mt-1 break-words">{(n.body || "").slice(0, 160)}</div>
+                </button>
+              ))}
+            </div>
+            <div className="hidden md:block card !p-0 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
+                  <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Date</th>
+                </tr></thead>
+                <tbody>
+                  {notes.map((n: any) => (
+                    <tr key={n.id} onClick={() => setEditNoteId(n.id)} className="table-row cursor-pointer">
+                      <td className="px-4 py-2">
+                        <div className="font-medium">{n.title || "Untitled"}</div>
+                        <div className="text-xs text-slate-400 truncate max-w-[52ch]">{(n.body || "").slice(0, 120)}</div>
+                      </td>
+                      <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">
+                        {new Date(n.updatedAt || n.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+        {tab === "Events" && (
+          <>
+            {events.length === 0 && <span className="text-slate-400">No meetings linked.</span>}
+            <div className="md:hidden flex flex-col gap-2">
+              {events.map((e) => (
+                <div key={e.uid} onClick={() => setViewEvent(e)} className="card !p-3 cursor-pointer">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-medium flex items-center gap-2">
+                      {e.summary || "(no title)"}
+                      {e.auto && <span className="text-[10px] uppercase tracking-wide text-brand-500">auto</span>}
+                    </div>
+                    <span className="text-xs text-slate-500 dark:text-zinc-400 whitespace-nowrap">{fmtEvDate(e)}</span>
+                  </div>
+                  {e.location && <div className="text-xs text-slate-400 mt-1">{e.location}</div>}
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block card !p-0 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
+                  <th className="px-4 py-2 font-medium">Meeting</th><th className="px-4 py-2 font-medium">When</th>
+                </tr></thead>
+                <tbody>
+                  {events.map((e) => (
+                    <tr key={e.uid} onClick={() => setViewEvent(e)} className="table-row cursor-pointer">
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <IconMeeting className="shrink-0 text-slate-400" />
+                          <span className="font-medium truncate">{e.summary || "(no title)"}</span>
+                          {e.auto && <span className="text-[10px] uppercase tracking-wide text-brand-500 shrink-0">auto</span>}
+                        </div>
+                        {e.location && <div className="text-xs text-slate-400 truncate max-w-[52ch]">{e.location}</div>}
+                      </td>
+                      <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">{fmtEvDate(e)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
 
-      <Section icon={<IconPeople />} title="People" count={people.length}>
-        <select className="input !w-auto !py-1.5 text-xs mb-3" value="" disabled={linkBusy}
-          title="Link a person to this project"
-          onChange={(e) => { const v = e.target.value; e.target.value = ""; linkPerson(v); }}>
-          <option value="">＋ Add a Person…</option>
-          {allContacts.filter((c: any) => !people.some((m: any) => m.id === c.id)).map((c: any) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-        {people.length ? (
-          <div className="card !p-0 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
-                <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Email</th>
-                <th className="px-4 py-2 font-medium">Phone</th><th className="px-4 py-2 font-medium">Company</th>
-                <th className="px-4 py-2 font-medium">Role</th><th className="w-10"></th>
-              </tr></thead>
-              <tbody>
-                {people.map((c: any) => (
-                  <tr key={c.id} onClick={() => router.push(`/people?person=${c.id}&from=/projects/${p.id}`)} className="table-row cursor-pointer">
-                    <td className="px-4 py-2 font-medium">{c.name}</td>
-                    <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.email || "—"}</td>
-                    <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.phone || "—"}</td>
-                    <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.company || "—"}</td>
-                    <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.role || "—"}</td>
-                    <td className="px-2 py-2 text-right">
-                      <button type="button" title="Unlink from this project" disabled={linkBusy}
-                        onClick={(e) => { e.stopPropagation(); unlinkPerson(c.id); }}
-                        className="icon-btn !p-1 text-slate-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400">✕</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <Empty what="people" />}
-      </Section>
+        {tab === "People" && (
+          <>
+            <select className="input !w-auto !py-1.5 text-xs self-start" value="" disabled={linkBusy}
+              title="Link a person to this project"
+              onChange={(e) => { const v = e.target.value; e.target.value = ""; linkPerson(v); }}>
+              <option value="">＋ Add a Person…</option>
+              {allContacts.filter((c: any) => !people.some((m: any) => m.id === c.id)).map((c: any) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {people.length ? (
+              <>
+                <div className="card !p-0 overflow-x-auto md:hidden">
+                  <table className="w-full text-sm">
+                    <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
+                      <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Company</th><th className="w-10"></th>
+                    </tr></thead>
+                    <tbody>
+                      {people.map((c: any) => (
+                        <tr key={c.id} onClick={() => router.push(`/people?person=${c.id}&from=/projects/${p.id}`)} className="table-row cursor-pointer">
+                          <td className="px-4 py-2 font-medium">{c.name}</td>
+                          <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.company || "—"}</td>
+                          <td className="px-2 py-2 text-right">
+                            <button type="button" title="Unlink from this project" disabled={linkBusy}
+                              onClick={(e) => { e.stopPropagation(); unlinkPerson(c.id); }}
+                              className="icon-btn !p-1 text-slate-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400">✕</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="hidden md:block card !p-0 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
+                      <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Email</th>
+                      <th className="px-4 py-2 font-medium">Phone</th><th className="px-4 py-2 font-medium">Company</th>
+                      <th className="px-4 py-2 font-medium">Role</th><th className="w-10"></th>
+                    </tr></thead>
+                    <tbody>
+                      {people.map((c: any) => (
+                        <tr key={c.id} onClick={() => router.push(`/people?person=${c.id}&from=/projects/${p.id}`)} className="table-row cursor-pointer">
+                          <td className="px-4 py-2 font-medium">{c.name}</td>
+                          <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.email || "—"}</td>
+                          <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.phone || "—"}</td>
+                          <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.company || "—"}</td>
+                          <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.role || "—"}</td>
+                          <td className="px-2 py-2 text-right">
+                            <button type="button" title="Unlink from this project" disabled={linkBusy}
+                              onClick={(e) => { e.stopPropagation(); unlinkPerson(c.id); }}
+                              className="icon-btn !p-1 text-slate-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400">✕</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : <Empty what="people" />}
+          </>
+        )}
 
-      <Section icon={<IconAccounts />} title="Transactions" count={transactions.length}>
-        <LinkedTransactionsTable transactions={transactions} />
-      </Section>
+        {tab === "Transactions" && <LinkedTransactionsTable transactions={transactions} onTransactionClick={handleTransactionClick} />}
 
-      <Section icon={<IconFile />} title="Files" count={files.length}>
-        {files.length ? (
-          <div className="card !p-0 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
-                <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Date</th>
-              </tr></thead>
-              <tbody>
-                {files.map((d: any) => (
-                  <tr key={d.id} onClick={() => setViewFileId(d.id)} className="table-row cursor-pointer">
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <IconFile className="shrink-0" />
-                        <span className="font-medium truncate">{d.filename}</span>
-                      </div>
-                      <div className="text-xs text-slate-400">{kindOf(d.mime, d.filename)} · {fmtSize(d.size)}</div>
-                    </td>
-                    <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">
-                      {new Date(d.updatedAt || d.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <Empty what="files" />}
-      </Section>
+        {tab === "Files" && (
+          <>
+            {files.length === 0 && <span className="text-slate-400">No files linked.</span>}
+            <div className="md:hidden flex flex-col gap-2">
+              {files.map((d: any) => (
+                <div key={d.id} onClick={() => setViewFileId(d.id)} className="card !p-3 cursor-pointer">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <IconFile className="shrink-0" />
+                    <div className="font-medium truncate">{d.filename}</div>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">{kindOf(d.mime, d.filename)} · {fmtSize(d.size)} · {new Date(d.updatedAt || d.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block card !p-0 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
+                  <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Date</th>
+                </tr></thead>
+                <tbody>
+                  {files.map((d: any) => (
+                    <tr key={d.id} onClick={() => setViewFileId(d.id)} className="table-row cursor-pointer">
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <IconFile className="shrink-0" />
+                          <span className="font-medium truncate">{d.filename}</span>
+                        </div>
+                        <div className="text-xs text-slate-400">{kindOf(d.mime, d.filename)} · {fmtSize(d.size)}</div>
+                      </td>
+                      <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">
+                        {new Date(d.updatedAt || d.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+      </div>
 
       {editTaskId && <TaskEditor id={editTaskId} onClose={() => setEditTaskId(null)} onSaved={() => { setEditTaskId(null); load(); }} onDeleted={() => { setEditTaskId(null); load(); }} />}
       {editNoteId && <NoteEditor id={editNoteId} onClose={() => setEditNoteId(null)} onSaved={() => { setEditNoteId(null); load(); }} onDeleted={() => { setEditNoteId(null); load(); }} />}
       {viewFileId && <FileViewer id={viewFileId} onClose={() => setViewFileId(null)} onDeleted={() => { setViewFileId(null); load(); }} onRelinked={() => { load(); }} />}
       {viewEvent && <EventDrawer ev={viewEvent} onClose={() => setViewEvent(null)} onChanged={load} />}
+      {selectedTransaction && (
+        <TransactionDrawer key={selectedTransaction.id} transaction={selectedTransaction} onClose={() => setSelectedTransaction(null)} />
+      )}
     </Shell>
   );
 }

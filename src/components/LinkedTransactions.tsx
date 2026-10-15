@@ -29,7 +29,7 @@ export type LinkedTx = {
  *  linked transaction. Used by the Person Transactions subtab and the Project
  *  Transactions section. Shows ONLY directly linked transactions — never
  *  anything pulled in via people↔project membership. */
-export default function LinkedTransactionsTable({ transactions }: { transactions: LinkedTx[] }) {
+export default function LinkedTransactionsTable({ transactions, onTransactionClick }: { transactions: LinkedTx[]; onTransactionClick?: (t: LinkedTx) => void; }) {
   const [rate, setRate] = useState(DEFAULT_RATE);
   const [totalCurrency, setTotalCurrency] = useState<"AED" | "USD">("AED");
 
@@ -75,7 +75,7 @@ export default function LinkedTransactionsTable({ transactions }: { transactions
             </thead>
             <tbody>
               {transactions.map((t) => (
-                <tr key={t.id} className="table-row">
+                <tr key={t.id} className="table-row" onClick={() => onTransactionClick?.(t)}>
                   <td className="px-4 py-2 font-medium">{t.description || "—"}</td>
                   <td className={`px-4 py-2 whitespace-nowrap font-medium ${Number(t.amount) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                     {txAmount(t.amount)}
@@ -112,7 +112,7 @@ export default function LinkedTransactionsTable({ transactions }: { transactions
       <div className="md:hidden">
         <div className="flex flex-col gap-2">
           {transactions.map((t) => (
-            <div key={t.id} className="card !p-3">
+            <div key={t.id} className="card !p-3" onClick={() => onTransactionClick?.(t)}>
               <div className="flex items-baseline justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${t.currency === "AED" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300" : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"}`}>

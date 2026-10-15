@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconFile, IconMeeting } from "@/components/icons";
 import { kindOf, fmtSize } from "@/components/FileBits";
@@ -9,6 +9,7 @@ import NoteEditor from "@/components/NoteEditor";
 import FileViewer from "@/components/FileViewer";
 import EventDrawer, { type Ev } from "@/components/EventDrawer";
 import LinkedTransactionsTable, { type LinkedTx } from "@/components/LinkedTransactions";
+import TransactionDrawer from "@/components/TransactionDrawer";
 
 const TABS = ["Projects", "Tasks", "Notes", "Files", "Events", "Transactions"] as const;
 
@@ -20,7 +21,7 @@ function fmtEvDate(e: Ev): string {
   return e.allDay ? date : `${date} · ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
 }
 
-export default function PersonTabs({ id, onChanged }: { id: string; onChanged?: () => void }) {
+export default function PersonTabs({ id, onChanged, onTransactionClick }: { id: string; onChanged?: () => void; onTransactionClick?: (t: LinkedTx) => void; }) {
   const router = useRouter();
   const [tab, setTab] = useState<(typeof TABS)[number]>("Projects");
   const [notes, setNotes] = useState<any[]>([]);
@@ -31,6 +32,19 @@ export default function PersonTabs({ id, onChanged }: { id: string; onChanged?: 
   const [files, setFiles] = useState<any[]>([]);
   const [events, setEvents] = useState<Ev[]>([]);
   const [transactions, setTransactions] = useState<LinkedTx[]>([]);
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  // On tab click, scroll the tabs card to the top of the viewport so the
+  // tab bar stays pinned while browsing (mobile-only).
+  const selectTab = useCallback((t: "Projects" | "Tasks" | "Notes" | "Files" | "Events" | "Transactions") => {
+    setTab(t);
+    if (window.innerWidth < 768) {
+      requestAnimationFrame(() => {
+        cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, []);
   const [viewEvent, setViewEvent] = useState<Ev | null>(null);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
   const [editNoteId, setEditNoteId] = useState<string | null>(null);
@@ -57,13 +71,22 @@ export default function PersonTabs({ id, onChanged }: { id: string; onChanged?: 
     }).catch(() => {});
     fetch(`/api/transaction-links?contactId=${id}`).then((r) => r.json()).then((j: any) => {
       if (Array.isArray(j?.transactions)) {
+        setAllTransactions(j.transactions);
         setTransactions(j.transactions.map((t: any) => ({
           id: t.id, description: t.description, amount: t.amount,
           currency: t.currency, transactionDate: t.transactionDate,
         })));
-      } else setTransactions([]);
+      } else {
+        setAllTransactions([]);
+        setTransactions([]);
+      }
     }).catch(() => {});
   }
+  function handleTransactionClick(t: LinkedTx) {
+    const full = allTransactions.find((tx) => tx.id === t.id) || null;
+    setSelectedTransaction(full);
+  }
+
   useEffect(() => { load(); }, [id]);
 
   async function linkProject(projectId: string) {
@@ -87,10 +110,10 @@ export default function PersonTabs({ id, onChanged }: { id: string; onChanged?: 
   }
 
   return (
-    <div className="card flex-1 min-w-0 w-full">
+    <div ref={cardRef} className="card flex-1 min-w-0 w-full">
       <div className="grid grid-cols-2 gap-1 mb-3 md:flex md:gap-1">
         {TABS.map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`tab-btn text-center ${tab === t ? "tab-btn-active" : ""}`}>{t}</button>
+          <button key={t} onClick={() => selectTab(t)} className={`tab-btn text-center ${tab === t ? "tab-btn-active" : ""}`}>{t}</button>
         ))}
       </div>
       <div className="text-sm flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
@@ -324,7 +347,7 @@ export default function PersonTabs({ id, onChanged }: { id: string; onChanged?: 
                 )}
               </>
             )}
-        {tab === "Transactions" && <LinkedTransactionsTable transactions={transactions} />}
+        {tab === "Transactions" && <LinkedTransactionsTable transactions={transactions} onTransactionClick={handleTransactionClick} />}
       </div>
 
       {viewEvent && <EventDrawer ev={viewEvent} onClose={() => setViewEvent(null)} onChanged={load} />}
@@ -332,6 +355,9 @@ export default function PersonTabs({ id, onChanged }: { id: string; onChanged?: 
       {editTaskId && <TaskEditor id={editTaskId} onClose={() => setEditTaskId(null)} onSaved={() => { setEditTaskId(null); load(); onChanged?.(); }} onDeleted={() => { setEditTaskId(null); load(); onChanged?.(); }} />}
       {editNoteId && <NoteEditor id={editNoteId} onClose={() => setEditNoteId(null)} onSaved={() => { setEditNoteId(null); load(); onChanged?.(); }} onDeleted={() => { setEditNoteId(null); load(); onChanged?.(); }} />}
       {viewFileId && <FileViewer id={viewFileId} onClose={() => setViewFileId(null)} onDeleted={() => { setViewFileId(null); load(); onChanged?.(); }} onRelinked={() => { load(); onChanged?.(); }} />}
+      {selectedTransaction && (
+        <TransactionDrawer key={selectedTransaction.id} transaction={selectedTransaction} onClose={() => setSelectedTransaction(null)} />
+      )}
     </div>
   );
 }
