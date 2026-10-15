@@ -4,6 +4,7 @@ import { IconDownload, IconTrash } from "@/components/icons";
 import { ViewerBody } from "@/components/ViewerBody";
 import SlideOver from "@/components/SlideOver";
 import { FILE_TAGS, tagClasses } from "@/components/FileBits";
+import TagDropdown from "@/components/TagDropdown";
 
 export function useFileMeta(id: string | null) {
   const [data, setData] = useState<any>(null);
@@ -61,15 +62,16 @@ export default function FileViewer({ id, onClose, onDeleted, onRelinked }: {
             <option value="">No project</option>
             {projects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
           </select>
-          <select
-            className={`input !w-auto !py-1 text-xs font-medium ${data?.tag ? tagClasses(data.tag) + " border" : ""}`}
+          <TagDropdown
+            options={[...FILE_TAGS]}
             value={data?.tag || ""}
-            onChange={(e) => relink("tag", e.target.value || null)}
+            clearLabel="No tag"
+            placeholder="No tag"
+            pillClass={tagClasses}
+            onSelect={(t) => relink("tag", t || null)}
+            triggerClass="!w-auto !py-1 text-xs"
             title="File tag"
-          >
-            <option value="">No tag</option>
-            {FILE_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          />
         </div>
       )}
       bodyClass="p-4 bg-slate-100 dark:bg-zinc-950"

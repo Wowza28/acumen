@@ -71,6 +71,8 @@ function ProjectDetailInner() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>({});
   const [transactions, setTransactions] = useState<LinkedTx[]>([]);
+  const [allContacts, setAllContacts] = useState<any[]>([]);
+  const [linkBusy, setLinkBusy] = useState(false);
 
   async function load() {
     if (!id) return;
@@ -89,6 +91,9 @@ function ProjectDetailInner() {
         })));
       } else setTransactions([]);
     }).catch(() => {});
+    fetch("/api/contacts").then((r) => r.json()).then((cj: any) => {
+      if (Array.isArray(cj)) setAllContacts(cj);
+    }).catch(() => {});
     // Keep Revenue live: recompute from linked transactions on every open,
     // then reflect the fresh value in the displayed project.
     fetch("/api/transaction-links/sync-revenue", {
@@ -101,6 +106,26 @@ function ProjectDetailInner() {
     }).catch(() => {});
   }
   useEffect(() => { load(); }, [id]);
+
+  async function linkPerson(contactId: string) {
+    if (!contactId || linkBusy || !id) return;
+    setLinkBusy(true);
+    try {
+      await fetch("/api/project-contacts", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: id, contactId }),
+      });
+      load();
+    } finally { setLinkBusy(false); }
+  }
+  async function unlinkPerson(contactId: string) {
+    if (linkBusy || !id) return;
+    setLinkBusy(true);
+    try {
+      await fetch(`/api/project-contacts?projectId=${encodeURIComponent(id)}&contactId=${encodeURIComponent(contactId)}`, { method: "DELETE" });
+      load();
+    } finally { setLinkBusy(false); }
+  }
 
   async function del() {
     if (!p) return;
@@ -415,13 +440,21 @@ function ProjectDetailInner() {
       </Section>
 
       <Section icon={<IconPeople />} title="People" count={people.length}>
+        <select className="input !w-auto !py-1.5 text-xs mb-3" value="" disabled={linkBusy}
+          title="Link a person to this project"
+          onChange={(e) => { const v = e.target.value; e.target.value = ""; linkPerson(v); }}>
+          <option value="">＋ Add a Person…</option>
+          {allContacts.filter((c: any) => !people.some((m: any) => m.id === c.id)).map((c: any) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
         {people.length ? (
           <div className="card !p-0 overflow-hidden">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
                 <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Email</th>
                 <th className="px-4 py-2 font-medium">Phone</th><th className="px-4 py-2 font-medium">Company</th>
-                <th className="px-4 py-2 font-medium">Role</th>
+                <th className="px-4 py-2 font-medium">Role</th><th className="w-10"></th>
               </tr></thead>
               <tbody>
                 {people.map((c: any) => (
@@ -431,6 +464,11 @@ function ProjectDetailInner() {
                     <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.phone || "—"}</td>
                     <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.company || "—"}</td>
                     <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.role || "—"}</td>
+                    <td className="px-2 py-2 text-right">
+                      <button type="button" title="Unlink from this project" disabled={linkBusy}
+                        onClick={(e) => { e.stopPropagation(); unlinkPerson(c.id); }}
+                        className="icon-btn !p-1 text-slate-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400">✕</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

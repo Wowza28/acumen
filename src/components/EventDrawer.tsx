@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import SlideOver from "@/components/SlideOver";
-import { IconPeople, IconProject, IconX, IconPencil, IconTrash } from "@/components/icons";
+import { IconPencil, IconTrash } from "@/components/icons";
 import EventForm, { makeDraft, draftToBody, type EventDraft } from "@/components/EventForm";
 
 export type Ev = {
@@ -155,28 +155,36 @@ function EventDrawerBody({ ev, onChanged }: { ev: Ev | null; onChanged?: () => v
     if (Array.isArray(j?.links)) setLinks(j.links);
     onChanged?.();
   }
-  async function addLink(field: "contactId" | "projectId", id: string) {
-    if (!id) return;
+  const currentContactId = links.find((l) => l.contactId)?.contactId || "";
+  const currentProjectId = links.find((l) => l.projectId)?.projectId || "";
+
+  /** Single-select linking (matches the Note/Task editors): normalize the
+   *  event's links to at most one row carrying the chosen person + project. */
+  async function setLinked(field: "contactId" | "projectId", value: string) {
+    if (busy) return;
+    const prev = field === "contactId" ? currentContactId : currentProjectId;
+    if (prev === value) return;
+    const nextContact = field === "contactId" ? value : currentContactId;
+    const nextProject = field === "projectId" ? value : currentProjectId;
     setBusy(true);
     try {
-      await fetch("/api/event-links", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventUid: uid,
-          eventTitle: ev!.summary || "",
-          eventStart: ev!.start || "",
-          eventEnd: ev!.end || "",
-          [field]: id,
-        }),
-      });
-      await refresh();
-    } finally { setBusy(false); }
-  }
-  async function removeLink(id: string) {
-    setBusy(true);
-    try {
-      await fetch(`/api/event-links?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      for (const l of links) {
+        await fetch(`/api/event-links?id=${encodeURIComponent(l.id)}`, { method: "DELETE" });
+      }
+      if (nextContact || nextProject) {
+        await fetch("/api/event-links", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventUid: uid,
+            eventTitle: ev!.summary || "",
+            eventStart: ev!.start || "",
+            eventEnd: ev!.end || "",
+            ...(nextContact ? { contactId: nextContact } : {}),
+            ...(nextProject ? { projectId: nextProject } : {}),
+          }),
+        });
+      }
       await refresh();
     } finally { setBusy(false); }
   }
@@ -189,9 +197,6 @@ function EventDrawerBody({ ev, onChanged }: { ev: Ev | null; onChanged?: () => v
   const timeLine = ev.allDay
     ? "All day"
     : [start && !isNaN(+start) ? timeOf(ev.start) : "", end && !isNaN(+end) ? timeOf(ev.end) : ""].filter(Boolean).join(" – ") || "";
-
-  const linkedContactIds = new Set(links.filter((l) => l.contact).map((l) => l.contactId!));
-  const linkedProjectIds = new Set(links.filter((l) => l.project).map((l) => l.projectId!));
 
   return (
     <>
@@ -234,42 +239,21 @@ function EventDrawerBody({ ev, onChanged }: { ev: Ev | null; onChanged?: () => v
         </Row>
       )}
 
-      <Row label="Linked to">
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {links.flatMap((l) => {
-            const chips: ReactNode[] = [];
-            if (l.contact) chips.push(<Chip key={`${l.id}-c`} icon={<IconPeople className="w-3.5 h-3.5" />} label={l.contact.name} disabled={busy} onRemove={() => removeLink(l.id)} />);
-            if (l.project) chips.push(<Chip key={`${l.id}-p`} icon={<IconProject className="w-3.5 h-3.5" />} label={l.project.title} disabled={busy} onRemove={() => removeLink(l.id)} />);
-            return chips;
-          })}
-          {!links.length && <span className="text-slate-400 dark:text-zinc-500 text-xs">Not linked to anyone yet.</span>}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <select className="input !py-1 text-xs" value="" disabled={busy}
-            onChange={(e) => addLink("contactId", e.target.value)}>
-            <option value="">＋ Link a person…</option>
-            {people.filter((p) => !linkedContactIds.has(p.id)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <select className="input !py-1 text-xs" value="" disabled={busy}
-            onChange={(e) => addLink("projectId", e.target.value)}>
-            <option value="">＋ Link a project…</option>
-            {projects.filter((p) => !linkedProjectIds.has(p.id)).map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-          </select>
-        </div>
+      <Row label="Person">
+        <select className="input !py-1.5 text-xs" value={currentContactId} disabled={busy}
+          onChange={(e) => setLinked("contactId", e.target.value)}>
+          <option value="">— none —</option>
+          {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </Row>
+      <Row label="Project">
+        <select className="input !py-1.5 text-xs" value={currentProjectId} disabled={busy}
+          onChange={(e) => setLinked("projectId", e.target.value)}>
+          <option value="">— none —</option>
+          {projects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+        </select>
       </Row>
     </>
-  );
-}
-
-function Chip({ icon, label, onRemove, disabled }: { icon: ReactNode; label: string; onRemove: () => void; disabled?: boolean }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-zinc-800 pl-2 pr-1 py-0.5 text-xs">
-      {icon}
-      <span className="max-w-[18ch] truncate">{label}</span>
-      <button className="icon-btn !p-0.5" title="Remove link" disabled={disabled} onClick={onRemove}>
-        <IconX className="w-3 h-3" />
-      </button>
-    </span>
   );
 }
 

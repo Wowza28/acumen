@@ -26,6 +26,8 @@ export default function PersonTabs({ id, onChanged }: { id: string; onChanged?: 
   const [notes, setNotes] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
+  const [allProjects, setAllProjects] = useState<any[]>([]);
+  const [linkBusy, setLinkBusy] = useState(false);
   const [files, setFiles] = useState<any[]>([]);
   const [events, setEvents] = useState<Ev[]>([]);
   const [transactions, setTransactions] = useState<LinkedTx[]>([]);
@@ -43,6 +45,7 @@ export default function PersonTabs({ id, onChanged }: { id: string; onChanged?: 
     }).catch(() => {});
     fetch("/api/projects").then((r) => r.json()).then((all: any[]) => {
       if (Array.isArray(all)) {
+        setAllProjects(all);
         setProjects(all.filter((p) => (p.contacts || []).some((c: any) => c.contactId === id || c.contact?.id === id)));
       }
     }).catch(() => {});
@@ -63,6 +66,26 @@ export default function PersonTabs({ id, onChanged }: { id: string; onChanged?: 
   }
   useEffect(() => { load(); }, [id]);
 
+  async function linkProject(projectId: string) {
+    if (!projectId || linkBusy) return;
+    setLinkBusy(true);
+    try {
+      await fetch("/api/project-contacts", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, contactId: id }),
+      });
+      load();
+    } finally { setLinkBusy(false); }
+  }
+  async function unlinkProject(projectId: string) {
+    if (linkBusy) return;
+    setLinkBusy(true);
+    try {
+      await fetch(`/api/project-contacts?projectId=${encodeURIComponent(projectId)}&contactId=${encodeURIComponent(id)}`, { method: "DELETE" });
+      load();
+    } finally { setLinkBusy(false); }
+  }
+
   return (
     <div className="card flex-1 min-w-0">
       <div className="flex gap-1 mb-3">
@@ -71,28 +94,45 @@ export default function PersonTabs({ id, onChanged }: { id: string; onChanged?: 
         ))}
       </div>
       <div className="text-sm flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
-        {tab === "Projects" && (projects.length ? (
-          <div className="card !p-0 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
-                <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Date</th>
-              </tr></thead>
-              <tbody>
-                {projects.map((p: any) => (
-                  <tr key={p.id} onClick={() => router.push(`/projects/${p.id}`)} className="table-row cursor-pointer">
-                    <td className="px-4 py-2">
-                      <div className="font-medium">{p.title} <span className="text-xs text-slate-400">[{p.status}]</span></div>
-                      {(p.description || "") && <div className="text-xs text-slate-400 truncate max-w-[46ch]">{p.description.slice(0, 140)}</div>}
-                    </td>
-                    <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">
-                      {new Date(p.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {tab === "Projects" && (
+          <div className="flex flex-col gap-2">
+            <select className="input !w-auto !py-1.5 text-xs self-start" value="" disabled={linkBusy}
+              title="Link this person to a project"
+              onChange={(e) => { const v = e.target.value; e.target.value = ""; linkProject(v); }}>
+              <option value="">＋ Add to a Project…</option>
+              {allProjects.filter((ap) => !projects.some((m) => m.id === ap.id)).map((ap) => (
+                <option key={ap.id} value={ap.id}>{ap.title}</option>
+              ))}
+            </select>
+            {projects.length ? (
+              <div className="card !p-0 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
+                    <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Date</th><th className="w-10"></th>
+                  </tr></thead>
+                  <tbody>
+                    {projects.map((p: any) => (
+                      <tr key={p.id} onClick={() => router.push(`/projects/${p.id}`)} className="table-row cursor-pointer">
+                        <td className="px-4 py-2">
+                          <div className="font-medium">{p.title} <span className="text-xs text-slate-400">[{p.status}]</span></div>
+                          {(p.description || "") && <div className="text-xs text-slate-400 truncate max-w-[46ch]">{p.description.slice(0, 140)}</div>}
+                        </td>
+                        <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">
+                          {new Date(p.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <button type="button" title="Unlink from this person" disabled={linkBusy}
+                            onClick={(e) => { e.stopPropagation(); unlinkProject(p.id); }}
+                            className="icon-btn !p-1 text-slate-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400">✕</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <span className="text-slate-400">No projects linked.</span>}
           </div>
-        ) : <span className="text-slate-400">No projects linked.</span>)}
+        )}
         {tab === "Tasks" && (tasks.length ? (
           <div className="card !p-0 overflow-hidden">
             <table className="w-full text-sm">

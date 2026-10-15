@@ -3,15 +3,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Shell from "@/components/Shell";
 import PageHeader from "@/components/PageHeader";
 import SlideOver from "@/components/SlideOver";
-import { IconUpload, IconPlus, IconTrash, IconPencil, IconCheck, IconX, IconPeople, IconProject } from "@/components/icons";
+import { IconUpload, IconPlus, IconTrash, IconPencil, IconCheck } from "@/components/icons";
 import AccountsGraph, { buildBuckets, type DisplayCurrency, type GraphMode, type VatExclusionRule } from "@/components/AccountsGraph";
+import { TRANSACTION_TAGS, parseTransactionTags, transactionTagClasses } from "@/components/TransactionTags";
+import TagDropdown from "@/components/TagDropdown";
 
 type VatExclusion = { id: string; side: string; pattern: string; enabled: boolean };
 
 type Transaction = {
   id: string; currency: string; transactionType: string; transactionDate: string;
   referenceNumber: string; description: string; amount: number;
-  balance: number | null; notes: string | null;
+  balance: number | null; notes: string | null; tags?: string | null;
 };
 
 function money(value: number | null | undefined, currency: string) {
@@ -34,13 +36,15 @@ function isVatExcluded(t: { amount: number; description?: string | null }, exclu
 }
 
 /** Search matching for the Transactions tab: description (partial,
- *  case-insensitive), amount (within ±100), or date as displayed
+ *  case-insensitive), tag name (partial, case-insensitive), amount
+ *  (within ±100), or date as displayed
  *  (e.g. "Jun 30, 2026", case-insensitive substring). */
 function matchesSearch(t: Transaction, q: string) {
   const query = q.trim();
   if (!query) return true;
   const ql = query.toLowerCase();
   if ((t.description || "").toLowerCase().includes(ql)) return true;
+  if (parseTransactionTags(t.tags).some((tag) => tag.toLowerCase().includes(ql))) return true;
   const num = Number(query.replace(/,/g, ""));
   if (query !== "" && Number.isFinite(num) && Math.abs(Number(t.amount) - num) <= 100) return true;
   if (dateLabel(t.transactionDate).toLowerCase().includes(ql)) return true;
@@ -61,6 +65,12 @@ export default function AccountsPage() {
   const [exclusions, setExclusions] = useState<VatExclusion[]>([]);
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  // Bulk selection (radio column) + bulk action dropdowns on the tx tab.
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState("");
+  const [peopleList, setPeopleList] = useState<Array<{ id: string; name: string }>>([]);
+  const [projectsList, setProjectsList] = useState<Array<{ id: string; title: string }>>([]);
 
   async function loadExclusions() {
     const data = await fetch("/api/vat-exclusions").then((r) => r.json()).catch(() => []);
@@ -93,9 +103,22 @@ export default function AccountsPage() {
 
   async function load() {
     const data = await fetch("/api/transactions").then((r) => r.json()).catch(() => []);
-    setTransactions(Array.isArray(data) ? data : []);
+    const rows = Array.isArray(data) ? data : [];
+    setTransactions(rows);
+    // Keep the open drawer in sync after a bulk tag change (it re-tags
+    // same-description siblings, whose rows also changed).
+    setSelected((sel) => {
+      if (!sel) return sel;
+      const fresh = rows.find((t: Transaction) => t.id === sel.id);
+      return fresh || sel;
+    });
   }
   useEffect(() => { load(); loadExclusions(); }, []);
+  // Dropdown source lists for bulk link actions (load once).
+  useEffect(() => {
+    fetch("/api/contacts").then((r) => r.json()).then((j) => { if (Array.isArray(j)) setPeopleList(j); }).catch(() => {});
+    fetch("/api/projects").then((r) => r.json()).then((j) => { if (Array.isArray(j)) setProjectsList(j); }).catch(() => {});
+  }, []);
   useEffect(() => {
     fetch("/api/settings/exchange-rate").then((r) => r.json()).then((j) => {
       if (Number.isFinite(Number(j?.rate)) && Number(j.rate) > 0) setRate(Number(j.rate));
@@ -147,6 +170,112 @@ export default function AccountsPage() {
   }
   function toggleDateSort() {
     setDateSort((current) => current === "desc" ? "asc" : "desc");
+  }
+
+  // ---- bulk selection + actions (tx tab) ----
+  const allShownChecked = sortedTransactions.length > 0 && sortedTransactions.every((t) => checkedIds.has(t.id));
+  function toggleSelectAll() {
+    setCheckedIds(allShownChecked ? new Set() : new Set(sortedTransactions.map((t) => t.id)));
+  }
+  function toggleChecked(id: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function runBulk(action: () => Promise<{ count: number; note?: string }>) {
+    if (bulkBusy) return;
+    setBulkBusy(true); setBulkMsg("");
+    action()
+      .then(({ count, note }) => {
+        setBulkMsg(note || `Done for ${count} transaction${count === 1 ? "" : "s"}.`);
+        load(); loadExclusions();
+      })
+      .catch((e: any) => setBulkMsg(e?.message || "Bulk action failed."))
+      .finally(() => setBulkBusy(false));
+  }
+  function bulkModifyTag(tag: string) {
+    if (!tag || !checkedIds.size) return;
+    const ids = [...checkedIds];
+    const rows = transactions.filter((t) => checkedIds.has(t.id));
+    // Toggle semantics: if EVERY selected transaction already carries the tag,
+    // strip it from all of them; otherwise add it to all of them — so the
+    // selection ends up uniform either way.
+    const allHave = rows.length === ids.length && rows.every((t) => parseTransactionTags(t.tags).includes(tag));
+    runBulk(async () => {
+      const r = await fetch("/api/transaction-tags", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(allHave ? { ids, remove: [tag] } : { ids, add: [tag] }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not update tags.");
+      const n = typeof j.updated === "number" ? j.updated : ids.length;
+      return {
+        count: n,
+        note: `${allHave ? "Removed" : "Added"} "${tag}" ${allHave ? "from" : "to"} ${n} transaction${n === 1 ? "" : "s"}.`,
+      };
+    });
+  }
+  function bulkLink(field: "contactId" | "projectId", id: string) {
+    if (!id || !checkedIds.size) return;
+    const ids = [...checkedIds];
+    runBulk(async () => {
+      const r = await fetch("/api/transaction-links/bulk", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactionIds: ids, [field]: id }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not link transactions.");
+      return { count: typeof j.linked === "number" ? j.linked : ids.length };
+    });
+  }
+  function bulkExclude() {
+    const rows = sortedTransactions.filter((t) => checkedIds.has(t.id));
+    if (!rows.length) return;
+    // One exclusion rule per (side, trimmed description); skip rows already
+    // covered by an enabled rule so repeated clicks don't duplicate.
+    const wanted = new Map<string, "inflow" | "outflow">();
+    for (const t of rows) {
+      const desc = (t.description || "").trim();
+      if (!desc || desc.length > 200) continue;
+      const side: "inflow" | "outflow" = t.amount >= 0 ? "inflow" : "outflow";
+      const key = `${side}|${desc}`;
+      if (!wanted.has(key) && !isVatExcluded(t, exclusions)) wanted.set(key, side);
+    }
+    if (!wanted.size) { setBulkMsg("Nothing new to exclude — descriptions are already covered or empty."); return; }
+    runBulk(async () => {
+      let created = 0, failed = 0;
+      for (const [key, side] of wanted) {
+        const pattern = key.slice(key.indexOf("|") + 1);
+        try {
+          const r = await fetch("/api/vat-exclusions", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ side, pattern }),
+          });
+          if (r.ok) created++; else failed++;
+        } catch { failed++; }
+      }
+      const skipped = wanted.size - created;
+      const note = `Added ${created} exclusion rule${created === 1 ? "" : "s"}${failed ? `, ${failed} failed` : ""}${skipped ? `, ${skipped} skipped` : ""}.`;
+      return { count: created, note };
+    });
+  }
+  function bulkDelete() {
+    const ids = [...checkedIds];
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} selected transaction${ids.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    runBulk(async () => {
+      const r = await fetch("/api/transactions", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not delete transactions.");
+      setCheckedIds(new Set());
+      const n = typeof j.deleted === "number" ? j.deleted : ids.length;
+      return { count: n, note: `Deleted ${n} transaction${n === 1 ? "" : "s"}.` };
+    });
   }
 
   async function uploadStatement(file?: File) {
@@ -267,11 +396,44 @@ export default function AccountsPage() {
       </div>
       ) : (
       <div className="flex flex-col gap-3">
-        <input className="input max-w-md" placeholder="Search description, amount (±100), or date (e.g. Jun 30, 2026)…"
-          value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search transactions" />
+        <div className="flex flex-wrap items-center gap-2">
+          <input className="input max-w-md flex-1 min-w-[240px]" placeholder="Search description, tag, amount (±100), or date (e.g. Jun 30, 2026)…"
+            value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search transactions" />
+          {!!checkedIds.size && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-500 dark:text-zinc-400 whitespace-nowrap">{checkedIds.size} selected</span>
+              <TagDropdown options={TRANSACTION_TAGS} onSelect={bulkModifyTag}
+                placeholder="Modify tags…" pillClass={transactionTagClasses}
+                triggerClass="!w-auto !h-7 !py-0 text-xs" disabled={bulkBusy}
+                title="Adds the tag to all selected transactions — or removes it if every selected already has it" />
+              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected transactions to a person"
+                onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("contactId", v); }}>
+                <option value="">Link Person…</option>
+                {peopleList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected transactions to a project"
+                onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("projectId", v); }}>
+                <option value="">Link Project…</option>
+                {projectsList.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </select>
+              <button className="btn !h-7 !py-0 px-3 text-xs" disabled={bulkBusy} onClick={bulkExclude} title="Add selected descriptions to VAT exclusions">
+                {bulkBusy ? "Working…" : "Add to Exclusions"}
+              </button>
+              <button className="btn !h-7 !py-0 px-3 text-xs !bg-red-600 hover:!bg-red-700 !text-white" disabled={bulkBusy} onClick={bulkDelete} title="Delete selected transactions">
+                {bulkBusy ? "Working…" : "Delete"}
+              </button>
+              <button className="btn-ghost text-xs" disabled={bulkBusy} onClick={() => { setCheckedIds(new Set()); setBulkMsg(""); }} title="Clear selection">✕ Clear</button>
+            </div>
+          )}
+        </div>
+        {!!bulkMsg && <div className="text-xs text-slate-500 dark:text-zinc-400">{bulkMsg}</div>}
         <div className="card !p-0 overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
+            <th className="px-3 py-2 w-8">
+              <input type="checkbox" checked={allShownChecked} onChange={toggleSelectAll}
+                className="cbx" title="Select all shown transactions" aria-label="Select all shown transactions" />
+            </th>
             <th className="px-4 py-2 font-medium">Description</th>
             <th className="px-4 py-2 font-medium">Amount</th>
             <th className="px-4 py-2 font-medium">
@@ -290,7 +452,16 @@ export default function AccountsPage() {
             {sortedTransactions.map((transaction) => (
               <tr key={transaction.id} onClick={() => setSelected(transaction)}
                 className={`table-row cursor-pointer ${isVatExcluded(transaction, exclusions) ? "bg-brand-500/[0.06] dark:bg-brand-500/[0.10]" : ""}`}>
-                <td className="px-4 py-2 font-medium">{transaction.description || "—"}</td>
+                <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={checkedIds.has(transaction.id)} onChange={() => toggleChecked(transaction.id)}
+                    className="cbx" aria-label={`Select ${transaction.description || "transaction"}`} />
+                </td>
+                <td className="px-4 py-2">
+                  <span className="font-medium">{transaction.description || "—"}</span>
+                  {parseTransactionTags(transaction.tags).map((tag) => (
+                    <span key={tag} className={`inline-flex items-center rounded-full border px-1.5 py-px text-[10px] font-semibold leading-tight ml-1.5 align-middle ${transactionTagClasses(tag)}`}>{tag}</span>
+                  ))}
+                </td>
                 <td className={`px-4 py-2 whitespace-nowrap font-medium ${transaction.amount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                   {money(transaction.amount, "")}
                 </td>
@@ -308,7 +479,7 @@ export default function AccountsPage() {
         </div>
       </div>
       )}
-      {selected && <TransactionDrawer transaction={selected} onClose={() => setSelected(null)} exclusions={exclusions} onChanged={loadExclusions} />}
+      {selected && <TransactionDrawer key={selected.id} transaction={selected} onClose={() => setSelected(null)} exclusions={exclusions} onChanged={loadExclusions} onTagsChanged={load} />}
     </Shell>
   );
 }
@@ -443,19 +614,31 @@ function ExclusionRow({ rule, onChanged }: { rule: VatExclusion; onChanged: () =
 }
 
 
-function TransactionDrawer({ transaction, onClose, exclusions, onChanged }: {
-  transaction: Transaction; onClose: () => void; exclusions: VatExclusion[]; onChanged: () => void;
+function TransactionDrawer({ transaction, onClose, exclusions, onChanged, onTagsChanged }: {
+  transaction: Transaction; onClose: () => void; exclusions: VatExclusion[]; onChanged: () => void; onTagsChanged: () => void;
 }) {
   const [excBusy, setExcBusy] = useState(false);
   const [excMsg, setExcMsg] = useState("");
+  const [tags, setTags] = useState<string[]>(() => parseTransactionTags(transaction.tags));
+  const [tagBusy, setTagBusy] = useState(false);
+  const [tagMsg, setTagMsg] = useState("");
+  const [siblingCount, setSiblingCount] = useState<number | null>(null);
   const [links, setLinks] = useState<Array<{ id: string; contactId?: string | null; projectId?: string | null; contact?: { id: string; name: string } | null; project?: { id: string; title: string } | null }>>([]);
   const [people, setPeople] = useState<Array<{ id: string; name: string }>>([]);
   const [projects, setProjects] = useState<Array<{ id: string; title: string }>>([]);
   const [linkBusy, setLinkBusy] = useState(false);
+  const [delBusy, setDelBusy] = useState(false);
   const alreadyExcluded = isVatExcluded(transaction, exclusions);
 
   useEffect(() => {
     let alive = true;
+    setTags(parseTransactionTags(transaction.tags));
+    setTagMsg("");
+    // Count same-description siblings so the drawer can say how many rows a
+    // tag change will propagate to (exact description match, like the API).
+    fetch(`/api/transaction-tags/count?description=${encodeURIComponent(transaction.description || "")}`)
+      .then((r) => r.json()).then((j) => { if (alive && typeof j?.count === "number") setSiblingCount(j.count); })
+      .catch(() => {});
     fetch(`/api/transaction-links?transactionId=${transaction.id}`).then((r) => r.json()).then((j) => {
       if (alive && Array.isArray(j?.links)) setLinks(j.links);
     }).catch(() => {});
@@ -469,28 +652,78 @@ function TransactionDrawer({ transaction, onClose, exclusions, onChanged }: {
     if (Array.isArray(j?.links)) setLinks(j.links);
   }
 
-  async function addLink(field: "contactId" | "projectId", id: string) {
-    if (!id) return;
+  const currentContactId = links.find((l) => l.contactId)?.contactId || "";
+  const currentProjectId = links.find((l) => l.projectId)?.projectId || "";
+
+  /** Single-select linking (matches the Note/Task editors): normalize this
+   *  transaction's links to at most one row carrying the chosen person + project. */
+  async function setLinked(field: "contactId" | "projectId", value: string) {
+    if (linkBusy) return;
+    const prev = field === "contactId" ? currentContactId : currentProjectId;
+    if (prev === value) return;
+    const nextContact = field === "contactId" ? value : currentContactId;
+    const nextProject = field === "projectId" ? value : currentProjectId;
     setLinkBusy(true);
     try {
-      await fetch("/api/transaction-links", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transactionId: transaction.id, [field]: id }),
+      for (const l of links) {
+        await fetch(`/api/transaction-links?id=${encodeURIComponent(l.id)}`, { method: "DELETE" });
+      }
+      if (nextContact || nextProject) {
+        await fetch("/api/transaction-links", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transactionId: transaction.id,
+            ...(nextContact ? { contactId: nextContact } : {}),
+            ...(nextProject ? { projectId: nextProject } : {}),
+          }),
+        });
+      }
+      await refreshLinks();
+    } finally { setLinkBusy(false); }
+  }
+
+  async function applyTags(next: string[]) {
+    if (tagBusy) return;
+    const description = (transaction.description || "").trim();
+    if (!description) { setTagMsg("No description on this transaction — cannot propagate."); return; }
+    setTagBusy(true); setTagMsg("");
+    try {
+      // Bulk mode: the API retags EVERY row with this exact description, so
+      // same-description transactions always stay in sync automatically.
+      const r = await fetch("/api/transaction-tags", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: transaction.description, set: next }),
       });
-      await refreshLinks();
-    } finally { setLinkBusy(false); }
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not save tags.");
+      setTags(next);
+      const n = typeof j.updated === "number" ? j.updated : null;
+      setTagMsg(n != null ? `Applied to ${n} transaction${n === 1 ? "" : "s"} with this description.` : "Tags saved.");
+      onTagsChanged();
+    } catch (e: any) { setTagMsg(e?.message || "Could not save tags."); }
+    finally { setTagBusy(false); }
   }
 
-  async function removeLink(id: string) {
-    setLinkBusy(true);
+  /** Manually delete THIS transaction (single row — same-description siblings
+   *  are untouched). Reloads the table via the parent's load(), then closes. */
+  async function deleteOne() {
+    if (delBusy) return;
+    const label = transaction.description || "this transaction";
+    if (!confirm(`Delete "${label}"? This removes only this transaction and cannot be undone.`)) return;
+    setDelBusy(true);
     try {
-      await fetch(`/api/transaction-links?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-      await refreshLinks();
-    } finally { setLinkBusy(false); }
+      const r = await fetch("/api/transactions", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [transaction.id] }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not delete the transaction.");
+      onTagsChanged(); // parent's load() — refresh the table
+      onClose();
+    } catch (e: any) {
+      alert(e?.message || "Could not delete the transaction.");
+    } finally { setDelBusy(false); }
   }
-
-  const linkedContactIds = new Set(links.filter((l) => l.contact).map((l) => l.contactId!));
-  const linkedProjectIds = new Set(links.filter((l) => l.project).map((l) => l.projectId!));
   const rows: Array<[string, string]> = [
     ["Currency", transaction.currency],
     ["Transaction type", transaction.transactionType || "—"],
@@ -519,6 +752,50 @@ function TransactionDrawer({ transaction, onClose, exclusions, onChanged }: {
           </div>
         ))}
         <div>
+          <div className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-zinc-500 mb-1">Person</div>
+          <select className="input !py-1.5 text-xs" value={currentContactId} disabled={linkBusy}
+            onChange={(e) => setLinked("contactId", e.target.value)}>
+            <option value="">— none —</option>
+            {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <div className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-zinc-500 mb-1 mt-3">Project</div>
+          <select className="input !py-1.5 text-xs" value={currentProjectId} disabled={linkBusy}
+            onChange={(e) => setLinked("projectId", e.target.value)}>
+            <option value="">— none —</option>
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+          </select>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-zinc-500 mb-1">Tags</div>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {tags.length ? tags.map((tag) => (
+              <button key={tag} type="button" title={`Remove ${tag}`}
+                disabled={tagBusy}
+                onClick={() => applyTags(tags.filter((t) => t !== tag))}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold hover:opacity-70 ${transactionTagClasses(tag)}`}>
+                {tag}<span aria-hidden>✕</span>
+              </button>
+            )) : <span className="text-xs text-slate-400 dark:text-zinc-500">No tags yet.</span>}
+          </div>
+          <div className="flex gap-1.5">
+            <TagDropdown className="flex-1"
+              options={TRANSACTION_TAGS.filter((t) => !tags.includes(t))}
+              onSelect={(t) => { if (!tags.includes(t)) applyTags([...tags, t]); }}
+              placeholder="＋ Add a tag…"
+              pillClass={transactionTagClasses}
+              triggerClass="!py-1 text-xs"
+              disabled={tagBusy}
+              title="Add a tag"
+            />
+          </div>
+          <div className="text-[11px] mt-1.5 text-slate-500 dark:text-zinc-400">
+            {siblingCount != null && siblingCount > 1
+              ? `Tags apply to all ${siblingCount} transactions with this exact description.`
+              : "Tags apply to every transaction with this exact description."}
+          </div>
+          {tagMsg && <div className="text-xs mt-1 text-slate-500 dark:text-zinc-400">{tagMsg}</div>}
+        </div>
+        <div>
           <button
             className="btn !py-1.5 text-xs w-full"
             disabled={excBusy || alreadyExcluded || !(transaction.description || "").trim()}
@@ -545,38 +822,14 @@ function TransactionDrawer({ transaction, onClose, exclusions, onChanged }: {
           {excMsg && <div className="text-xs mt-1.5 text-slate-500 dark:text-zinc-400">{excMsg}</div>}
         </div>
         <div>
-          <div className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-zinc-500 mb-1">Linked to</div>
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {links.flatMap((l) => {
-              const chips: React.ReactNode[] = [];
-              if (l.contact) chips.push(
-                <span key={`${l.id}-c`} className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-zinc-800 pl-2 pr-1 py-0.5 text-xs">
-                  <IconPeople className="w-3.5 h-3.5" />
-                  <span className="max-w-[18ch] truncate">{l.contact.name}</span>
-                  <button className="icon-btn !p-0.5" title="Remove link" disabled={linkBusy} onClick={() => removeLink(l.id)}><IconX className="w-3 h-3" /></button>
-                </span>
-              );
-              if (l.project) chips.push(
-                <span key={`${l.id}-p`} className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-zinc-800 pl-2 pr-1 py-0.5 text-xs">
-                  <IconProject className="w-3.5 h-3.5" />
-                  <span className="max-w-[18ch] truncate">{l.project.title}</span>
-                  <button className="icon-btn !p-0.5" title="Remove link" disabled={linkBusy} onClick={() => removeLink(l.id)}><IconX className="w-3 h-3" /></button>
-                </span>
-              );
-              return chips;
-            })}
-            {!links.length && <span className="text-slate-400 dark:text-zinc-500 text-xs">Not linked to anyone yet.</span>}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <select className="input !py-1 text-xs" value="" disabled={linkBusy} onChange={(e) => addLink("contactId", e.target.value)}>
-              <option value="">＋ Link a person…</option>
-              {people.filter((p) => !linkedContactIds.has(p.id)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <select className="input !py-1 text-xs" value="" disabled={linkBusy} onChange={(e) => addLink("projectId", e.target.value)}>
-              <option value="">＋ Link a project…</option>
-              {projects.filter((p) => !linkedProjectIds.has(p.id)).map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-            </select>
-          </div>
+          <button
+            className="btn !py-1.5 text-xs w-full !bg-red-600 hover:!bg-red-700 !text-white"
+            disabled={delBusy}
+            title="Delete this transaction"
+            onClick={deleteOne}
+          >
+            {delBusy ? "Deleting…" : "Delete"}
+          </button>
         </div>
       </div>
     </SlideOver>

@@ -175,6 +175,7 @@ model Transaction {
   amount           Float
   balance          Float?
   notes            String?
+  tags             String            @default("[]")
   createdAt        DateTime          @default(now())
   transactionLinks TransactionLink[]
 

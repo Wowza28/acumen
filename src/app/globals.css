@@ -36,6 +36,41 @@ body { @apply bg-white text-slate-900 dark:bg-zinc-950 dark:text-zinc-100; }
 .tab-btn { @apply px-3 py-1.5 rounded-lg text-sm text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800; }
 .tab-btn-active { @apply bg-brand-500/10 text-brand-700 font-semibold dark:bg-brand-500/15 dark:text-brand-300; }
 
+/* Modern selection checkbox: transparent fill with a grey outline (no OS
+   white box); checked state fills with the brand color + white check. */
+.cbx {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid rgb(148 163 184); /* slate-400 */
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  flex-shrink: 0;
+}
+.cbx:hover { border-color: rgb(100 116 139); } /* slate-500 */
+.cbx:checked {
+  background-color: rgb(var(--brand-500));
+  border-color: rgb(var(--brand-500));
+}
+.cbx:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
+.dark .cbx { border-color: rgb(82 84 100); } /* zinc-600-ish */
+.dark .cbx:hover { border-color: rgb(113 113 128); }
+
 /* pdf.js selectable text layer (styles shipped in-project) */
 .textLayer {
   position: absolute;
