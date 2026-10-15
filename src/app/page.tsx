@@ -6,7 +6,7 @@ import ChatPanel from "@/components/ChatPanel";
 import VoiceButton from "@/components/VoiceButton";
 import useStagedFiles from "@/components/useStagedFiles";
 import StagedBar, { PaperclipButton } from "@/components/AttachBar";
-import { IconSend } from "@/components/icons";
+import { IconChip, IconSend } from "@/components/icons";
 import { makeAttachSuffix } from "@/lib/attach";
 import { chatRuntime } from "@/lib/chatRuntime";
 
@@ -21,6 +21,16 @@ function HomeInner() {
   const [provider, setProvider] = useState("openai");
   const { staged, add, remove, clear, uploadAll, uploading, dragOver, setDragOver } = useStagedFiles();
   const boxRef = useRef<HTMLTextAreaElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  // Responsive composer placeholder: the Shift+Enter hint is meaningless on
+  // touch and the long text clips on narrow screens.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   // Load available chat models from the server. When none are configured the
   // list is intentionally empty (no fallback) so the selector shows no options;
@@ -167,21 +177,31 @@ function HomeInner() {
           <StagedBar staged={staged} onRemove={remove} />
           <div className="flex items-center gap-1 border border-brand-500/50 dark:border-brand-400/50 rounded-2xl px-2 py-1.5 bg-white dark:bg-zinc-900 shadow-sm">
             <PaperclipButton onPick={(f) => add(f)} />
-            <select
-              className="bg-transparent text-xs text-slate-500 dark:text-zinc-400 outline-none cursor-pointer max-w-32 truncate px-1 py-1 rounded hover:bg-slate-100 dark:hover:bg-zinc-800"
-              title="Chat model"
-              value={provider}
-              onChange={(e) => {
-                setProvider(e.target.value);
-                try { localStorage.setItem("chat-provider", e.target.value); } catch {}
-              }}
-            >
-              {models.length === 0 && <option value="">No model</option>}
-              {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
+            {/* Model picker: a small chip icon button with a transparent native
+                select layered over it — tapping opens the OS model picker
+                (ideal on mobile), and native lists size themselves to the
+                longest model name, so no truncation. Saves the composer a
+                whole column of width for the message text. */}
+            <div className="relative group" title="Chat model">
+              <span className="icon-btn inline-flex items-center justify-center group-hover:bg-slate-100 dark:group-hover:bg-zinc-800">
+                <IconChip />
+              </span>
+              <select
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                aria-label="Chat model"
+                value={provider}
+                onChange={(e) => {
+                  setProvider(e.target.value);
+                  try { localStorage.setItem("chat-provider", e.target.value); } catch {}
+                }}
+              >
+                {models.length === 0 && <option value="">No model</option>}
+                {models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </div>
             <textarea
               ref={boxRef}
-              className="flex-1 bg-transparent outline-none text-sm px-2 py-2 resize-none max-h-40"
+              className="flex-1 min-w-0 bg-transparent outline-none text-sm px-2 py-2 resize-none max-h-40"
               rows={1} value={input}
               onChange={(e) => {
                 setInput(e.target.value);
@@ -191,7 +211,7 @@ function HomeInner() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
               }}
-              placeholder="Message… (Shift+Enter for new line)" />
+              placeholder={isMobile ? "Message…" : "Message… (Shift+Enter for new line)"} />
             <VoiceButton onTranscript={(t) => send(t)} />
             <button className="icon-btn text-brand-500 hover:bg-brand-500/10 dark:text-brand-400 dark:hover:bg-brand-500/15" onClick={() => send()} disabled={loading} title="Send"><IconSend /></button>
           </div>

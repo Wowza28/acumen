@@ -367,7 +367,7 @@ function ProjectDetailInner() {
       </div>
       <Section icon={<IconTask />} title="Tasks" count={tasks.length}>
         {tasks.length ? (
-          <div className="card !p-0 overflow-hidden">
+          <div className="card !p-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
                 <th className="px-4 py-2 font-medium">Title</th><th className="px-4 py-2 font-medium">Status</th>
@@ -390,7 +390,7 @@ function ProjectDetailInner() {
 
       <Section icon={<IconNote />} title="Notes" count={notes.length}>
         {notes.length ? (
-          <div className="card !p-0 overflow-hidden">
+          <div className="card !p-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
                 <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Date</th>
@@ -414,7 +414,7 @@ function ProjectDetailInner() {
       </Section>
       <Section icon={<IconMeeting />} title="Events" count={events.length}>
         {events.length ? (
-          <div className="card !p-0 overflow-hidden">
+          <div className="card !p-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
                 <th className="px-4 py-2 font-medium">Meeting</th><th className="px-4 py-2 font-medium">When</th>
@@ -449,7 +449,7 @@ function ProjectDetailInner() {
           ))}
         </select>
         {people.length ? (
-          <div className="card !p-0 overflow-hidden">
+          <div className="card !p-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
                 <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Email</th>
@@ -483,7 +483,7 @@ function ProjectDetailInner() {
 
       <Section icon={<IconFile />} title="Files" count={files.length}>
         {files.length ? (
-          <div className="card !p-0 overflow-hidden">
+          <div className="card !p-0 overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
                 <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Date</th>

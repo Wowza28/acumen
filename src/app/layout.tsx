@@ -8,6 +8,22 @@ export const metadata = {
       type: "image/svg+xml",
     },
   },
+  // PWA groundwork: "Add to Home Screen" on iOS renders standalone chrome
+  // using these hints. statusBarStyle "default" avoids safe-area overlap
+  // since content doesn't yet extend under the status bar.
+  appleWebApp: {
+    capable: true,
+    title: "ACUMEN",
+    statusBarStyle: "default",
+  },
+};
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+  ],
 };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

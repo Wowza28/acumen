@@ -112,3 +112,26 @@ body { @apply bg-white text-slate-900 dark:bg-zinc-950 dark:text-zinc-100; }
   font-weight: 200;
   letter-spacing: 0.12em;
 }
+
+/* Mobile: iOS Safari zooms the whole page when a focused input renders text
+   below 16px — jarring in an installed PWA. Bump form-control text to 16px
+   on small screens only (desktop untouched at md: and above). */
+@media (max-width: 767px) {
+  input, select, textarea, .input {
+    font-size: 16px !important;
+  }
+}
+/* Mobile: subtab buttons get visible separators + active tab is highlighted
+ * with a brand-colored border. Only on small screens (max-width: 767px) so
+ * the desktop/tablist (md:flex) layout stays untouched, matching the
+ * 'only change mobile UI' constraint. */
+@media (max-width: 767px) {
+  .tab-btn {
+    border: 1px solid rgb(148 163 184);
+  }
+  .tab-btn-active {
+    border-color: rgb(var(--brand-500));
+    border-style: solid;
+    border-width: 2px;
+  }
+}

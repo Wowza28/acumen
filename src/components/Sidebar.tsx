@@ -60,7 +60,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <aside className="w-64 shrink-0 h-screen sticky top-0 flex flex-col border-r border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60">
+    <aside className="w-64 shrink-0 h-screen sticky top-0 flex flex-col border-r border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900">
       <div className="p-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-0.5 text-2xl tracking-[0.15em] font-thin"><span className="text-brand-500 dark:text-brand-400 text-2xl">&#923;</span>CUMEN</Link>
         <button className="icon-btn" onClick={toggleTheme} title="Toggle theme">{theme === "dark" ? <IconSun /> : <IconMoon />}</button>

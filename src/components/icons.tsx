@@ -36,6 +36,12 @@ export const IconStop = ({ className }: P) => (
 export const IconSend = ({ className }: P) => (
   <svg viewBox="0 0 24 24" className={`${base} ${className || ""}`}><path d="M4 12 20 4l-4 8 4 8Z" /><path d="M11 13.5 20 4" /></svg>
 );
+export const IconSearch = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={`${base} ${className || ""}`}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.6-3.6" /></svg>
+);
+export const IconChip = ({ className }: P) => (
+  <svg viewBox="0 0 24 24" className={`${base} ${className || ""}`}><rect x="5" y="5" width="14" height="14" rx="2.5" /><rect x="9" y="9" width="6" height="6" rx="1" /><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" /></svg>
+);
 export const IconSun = ({ className }: P) => (
   <svg viewBox="0 0 24 24" className={`${base} ${className || ""}`}><circle cx="12" cy="12" r="4" /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" /></svg>
 );

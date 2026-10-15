@@ -77,7 +77,7 @@ export default function TasksPage() {
           <button className="btn !py-1.5 flex items-center gap-1.5" onClick={() => setAdding(true)}><span className="text-base leading-none">+</span> Add</button>
         </div>
       } />
-      <div className="card !p-0 overflow-hidden">
+      <div className="card !p-0 overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
             <th className="px-4 py-2 font-medium">Title</th>

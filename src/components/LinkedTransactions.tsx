@@ -61,49 +61,89 @@ export default function LinkedTransactionsTable({ transactions }: { transactions
   }, 0);
 
   return (
-    <div className="card !p-0 overflow-hidden">
-      <table className="w-full text-sm">
-        <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
-          <th className="px-4 py-2 font-medium">Description</th>
-          <th className="px-4 py-2 font-medium">Amount</th>
-          <th className="px-4 py-2 font-medium">Currency</th>
-          <th className="px-4 py-2 font-medium">Date</th>
-        </tr></thead>
-        <tbody>
+    <>
+      <div className="hidden md:block">
+        <div className="card !p-0 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
+                <th className="px-4 py-2 font-medium">Description</th>
+                <th className="px-4 py-2 font-medium">Amount</th>
+                <th className="px-4 py-2 font-medium">Currency</th>
+                <th className="px-4 py-2 font-medium">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((t) => (
+                <tr key={t.id} className="table-row">
+                  <td className="px-4 py-2 font-medium">{t.description || "—"}</td>
+                  <td className={`px-4 py-2 whitespace-nowrap font-medium ${Number(t.amount) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                    {txAmount(t.amount)}
+                  </td>
+                  <td className={`px-4 py-2 whitespace-nowrap font-medium ${t.currency === "AED" ? "text-yellow-600 dark:text-yellow-400" : "text-blue-600 dark:text-blue-400"}`}>
+                    {t.currency}
+                  </td>
+                  <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">{txDate(t.transactionDate)}</td>
+                </tr>
+              ))}
+              <tr className="border-t-2 border-slate-200 dark:border-zinc-700 font-semibold">
+                <td className="px-4 py-2">Total</td>
+                <td className={`px-4 py-2 whitespace-nowrap ${total >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                  {txAmount(total)}
+                </td>
+                <td className="px-4 py-2 whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => setTotalCurrency(totalCurrency === "AED" ? "USD" : "AED")}
+                    className={`font-semibold hover:underline ${totalCurrency === "AED" ? "text-yellow-600 dark:text-yellow-400" : "text-blue-600 dark:text-blue-400"}`}
+                    title="Toggle total currency"
+                  >
+                    {totalCurrency}
+                  </button>
+                </td>
+                <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">
+                  {latestDate ? txDate(new Date(latestDate).toISOString()) : "—"}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="md:hidden">
+        <div className="flex flex-col gap-2">
           {transactions.map((t) => (
-            <tr key={t.id} className="table-row">
-              <td className="px-4 py-2 font-medium">{t.description || "—"}</td>
-              <td className={`px-4 py-2 whitespace-nowrap font-medium ${Number(t.amount) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                {txAmount(t.amount)}
-              </td>
-              <td className={`px-4 py-2 whitespace-nowrap font-medium ${t.currency === "AED" ? "text-yellow-600 dark:text-yellow-400" : "text-blue-600 dark:text-blue-400"}`}>
-                {t.currency}
-              </td>
-              <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">{txDate(t.transactionDate)}</td>
-            </tr>
+            <div key={t.id} className="card !p-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${t.currency === "AED" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300" : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"}`}>
+                    {t.currency}
+                  </span>
+                  <span className={Number(t.amount) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{txAmount(t.amount)}</span>
+                </div>
+                <span className="text-xs text-slate-400 whitespace-nowrap">{txDate(t.transactionDate)}</span>
+              </div>
+              <div className="text-xs text-slate-600 dark:text-zinc-300 mt-1.5">{t.description || "—"}</div>
+            </div>
           ))}
-          <tr className="border-t-2 border-slate-200 dark:border-zinc-700 font-semibold">
-            <td className="px-4 py-2">Total</td>
-            <td className={`px-4 py-2 whitespace-nowrap ${total >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-              {txAmount(total)}
-            </td>
-            <td className="px-4 py-2 whitespace-nowrap">
-              <button
-                type="button"
-                onClick={() => setTotalCurrency(totalCurrency === "AED" ? "USD" : "AED")}
-                className={`font-semibold hover:underline ${totalCurrency === "AED" ? "text-yellow-600 dark:text-yellow-400" : "text-blue-600 dark:text-blue-400"}`}
-                title="Toggle total currency"
-              >
-                {totalCurrency}
-              </button>
-            </td>
-            <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 whitespace-nowrap">
-              {latestDate ? txDate(new Date(latestDate).toISOString()) : "—"}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+          <div className="card !p-3 font-semibold border-t border-slate-200 dark:border-zinc-700">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-sm">Total</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTotalCurrency(totalCurrency === "AED" ? "USD" : "AED")}
+                  className={`text-xs font-semibold hover:underline ${totalCurrency === "AED" ? "text-yellow-600 dark:text-yellow-400" : "text-blue-600 dark:text-blue-400"}`}
+                  title="Toggle total currency"
+                >
+                  {totalCurrency}
+                </button>
+                <span className={total >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{txAmount(total)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

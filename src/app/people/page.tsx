@@ -48,10 +48,14 @@ function PeopleInner() {
   }
 
   const sel = list.find((c) => c.id === selId) || null;
+  const ql = q.trim().toLowerCase();
   const filtered = list.filter((c) =>
-    !q || c.name.toLowerCase().includes(q.toLowerCase()) ||
-    (c.email || "").toLowerCase().includes(q.toLowerCase()) ||
-    (c.company || "").toLowerCase().includes(q.toLowerCase())
+    !ql ||
+    (c.name || "").toLowerCase().includes(ql) ||
+    (c.email || "").toLowerCase().includes(ql) ||
+    (c.company || "").toLowerCase().includes(ql) ||
+    (c.phone || "").toLowerCase().includes(ql) ||
+    (c.role || "").toLowerCase().includes(ql)
   );
 
   function selectPerson(id: string | null) {
@@ -111,33 +115,38 @@ function PeopleInner() {
 
   return (
     <Shell wide>
-      <PageHeader icon="people" title="People" count={list.length} right={
-        <div className="flex items-center gap-2">
-          <input className="input !w-48" placeholder="Search people…" value={q} onChange={(e) => setQ(e.target.value)} />
-          <input ref={vcfRef} type="file" accept=".vcf,text/vcard,text/x-vcard" className="hidden"
-            onChange={(e) => { importVcf(e.target.files?.[0]); e.target.value = ""; }} />
-          <button className="btn !py-1.5 flex items-center gap-1.5" onClick={() => vcfRef.current?.click()} title="Import .vcf contacts">
-            <IconUpload /> Import .vcf
-          </button>
-          <button className="btn !py-1.5 flex items-center gap-1.5" onClick={() => setAdding(true)}><span className="text-base leading-none">+</span> Add</button>
-        </div>
-      } />
+      {/* single hidden input shared by both the desktop + mobile Import buttons */}
+      <input ref={vcfRef} type="file" accept=".vcf,text/vcard,text/x-vcard" className="hidden"
+        onChange={(e) => { importVcf(e.target.files?.[0]); e.target.value = ""; }} />
+      <PageHeader icon="people" title="People" count={list.length}
+        search={{ value: q, onChange: setQ, placeholder: "Search people…" }}
+        actions={
+          <>
+            <button className="btn !py-1.5 flex items-center justify-center gap-1.5" onClick={() => vcfRef.current?.click()} title="Import .vcf contacts">
+              <IconUpload /> Import .vcf
+            </button>
+            <button className="btn !py-1.5 flex items-center justify-center gap-1.5" onClick={() => setAdding(true)}><span className="text-base leading-none">+</span> Add</button>
+          </>
+        }
+      />
       {importMsg && <div className="mb-3 text-sm text-slate-500">{importMsg}</div>}
-      <div className="card !p-0 overflow-hidden">
+      <div className="card !p-0 overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
-            <th className="px-4 py-2 font-medium">Name</th><th className="px-4 py-2 font-medium">Email</th>
-            <th className="px-4 py-2 font-medium">Phone</th><th className="px-4 py-2 font-medium">Company</th>
-            <th className="px-4 py-2 font-medium">Role</th>
+            <th className="px-4 py-2 font-medium">Name</th>
+            <th className="px-4 py-2 font-medium hidden sm:table-cell">Email</th>
+            <th className="px-4 py-2 font-medium hidden sm:table-cell">Phone</th>
+            <th className="px-4 py-2 font-medium">Company</th>
+            <th className="px-4 py-2 font-medium hidden sm:table-cell">Role</th>
           </tr></thead>
           <tbody>
             {filtered.map((c) => (
               <tr key={c.id} onClick={() => selectPerson(c.id)} className="table-row cursor-pointer">
-                <td className="px-4 py-2 font-medium">{c.name}</td>
-                <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.email || "—"}</td>
-                <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.phone || "—"}</td>
+                <td className="px-4 py-2 font-medium whitespace-nowrap">{c.name}</td>
+                <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 hidden sm:table-cell">{c.email || "—"}</td>
+                <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 hidden sm:table-cell">{c.phone || "—"}</td>
                 <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.company || "—"}</td>
-                <td className="px-4 py-2 text-slate-500 dark:text-zinc-400">{c.role || "—"}</td>
+                <td className="px-4 py-2 text-slate-500 dark:text-zinc-400 hidden sm:table-cell">{c.role || "—"}</td>
               </tr>
             ))}
           </tbody>
