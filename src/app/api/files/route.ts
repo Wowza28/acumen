@@ -19,16 +19,13 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   const b = await req.json();
-  if (!b.id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  // Only update fields actually sent in the request body, so linking a file
-  // to a Person / Project never clears the other link.
+  const allowed = ["Invoice", "Agreement", "KYC"];
   const updates: Record<string, string | null> = {};
   if (b.contactId !== undefined) updates.contactId = b.contactId || null;
   if (b.projectId !== undefined) updates.projectId = b.projectId || null;
   if (b.tag !== undefined) {
     const t = (b.tag || "").toString().trim();
-    const allowed = ["Invoice", "Agreement", "KYC"];
     if (t && !allowed.includes(t)) {
       return NextResponse.json({ error: "invalid tag — use Invoice, Agreement, or KYC" }, { status: 400 });
     }
@@ -42,6 +39,15 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
+  // Bulk mode: { ids: [...], contactId? / projectId? / tag? }
+  if (Array.isArray(b.ids)) {
+    const ids: string[] = b.ids.filter(Boolean);
+    if (!ids.length) return NextResponse.json({ error: "ids required" }, { status: 400 });
+    const r = await prisma.document.updateMany({ where: { id: { in: ids } }, data: updates });
+    return NextResponse.json({ updated: r.count });
+  }
+
+  if (!b.id) return NextResponse.json({ error: "id required" }, { status: 400 });
   const u = await prisma.document.update({
     where: { id: b.id },
     data: updates,
@@ -50,6 +56,23 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  // Bulk mode: DELETE with body { ids: [...] } — removes rows, index chunks,
+  // and the stored files for every id.
+  if ((req.headers.get("content-type") || "").includes("application/json")) {
+    try {
+      const b = await req.json();
+      if (Array.isArray(b?.ids) && b.ids.length) {
+        const ids: string[] = b.ids.filter(Boolean);
+        const docs = await prisma.document.findMany({ where: { id: { in: ids } } });
+        await prisma.docChunk.deleteMany({ where: { documentId: { in: ids } } });
+        await prisma.document.deleteMany({ where: { id: { in: ids } } });
+        for (const d of docs) {
+          try { await fs.unlink(resolveStoredPath(d.path)); } catch {}
+        }
+        return NextResponse.json({ deleted: docs.length });
+      }
+    } catch { /* fall through to single delete */ }
+  }
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   const d = await prisma.document.findUnique({ where: { id } });

@@ -5,6 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import FileViewer from "@/components/FileViewer";
 import { IconPeople, IconProject, IconFile, IconDownload, IconTrash, IconUpload } from "@/components/icons";
 import { kindOf, fmtSize, FILE_TAGS, tagClasses } from "@/components/FileBits";
+import TagDropdown from "@/components/TagDropdown";
 import PdfCanvas from "@/components/PdfCanvas";
 import DocxView from "@/components/DocxView";
 
@@ -106,6 +107,11 @@ export default function FilesPage() {
   const [sel, setSel] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState("");
+  const [peopleList, setPeopleList] = useState<Array<{ id: string; name: string }>>([]);
+  const [projectsList, setProjectsList] = useState<Array<{ id: string; title: string }>>([]);
   const [dragOver, setDragOver] = useState(false);
   const dragDepth = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -144,7 +150,94 @@ export default function FilesPage() {
     const j = await fetch("/api/files").then((r) => r.json()).catch(() => []);
     setList(Array.isArray(j) ? j : []);
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    fetch("/api/contacts").then((r) => r.json()).then((j) => { if (Array.isArray(j)) setPeopleList(j); }).catch(() => {});
+    fetch("/api/projects").then((r) => r.json()).then((j) => { if (Array.isArray(j)) setProjectsList(j); }).catch(() => {});
+  }, []);
+
+  // ---- bulk selection + actions ----
+  const selectionMode = checkedIds.size > 0;
+  function toggleChecked(id: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    if (filtered.length > 0 && filtered.every((d) => checkedIds.has(d.id))) {
+      setCheckedIds(new Set());
+    } else {
+      setCheckedIds(new Set(filtered.map((d) => d.id)));
+    }
+  }
+  function onCardClick(id: string) {
+    if (selectionMode) toggleChecked(id);
+    else setSel(id);
+  }
+  function runBulk(action: () => Promise<{ count: number; note?: string }>) {
+    if (bulkBusy) return;
+    setBulkBusy(true); setBulkMsg("");
+    action()
+      .then(({ count, note }) => {
+        setBulkMsg(note || `Done for ${count} file${count === 1 ? "" : "s"}.`);
+        load();
+      })
+      .catch((e: any) => setBulkMsg(e?.message || "Bulk action failed."))
+      .finally(() => setBulkBusy(false));
+  }
+  function bulkLink(field: "contactId" | "projectId", id: string) {
+    if (!id || !checkedIds.size) return;
+    const ids = [...checkedIds];
+    runBulk(async () => {
+      const r = await fetch("/api/files", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, [field]: id }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not link files.");
+      return { count: typeof j.updated === "number" ? j.updated : ids.length };
+    });
+  }
+  // Toggle semantics (same as bulk transactions tags): if ANY selected file
+  // lacks the tag, apply it to the whole selection; if ALL already have it,
+  // strip it from all of them — so the selection ends up uniform.
+  function bulkModifyTag(tag: string) {
+    if (!tag || !checkedIds.size) return;
+    const ids = [...checkedIds];
+    const rows = list.filter((d) => checkedIds.has(d.id));
+    const allHave = rows.length === ids.length && rows.every((d) => (d.tag || "") === tag);
+    runBulk(async () => {
+      const r = await fetch("/api/files", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, tag: allHave ? "" : tag }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not update tags.");
+      const n = typeof j.updated === "number" ? j.updated : ids.length;
+      return {
+        count: n,
+        note: `${allHave ? "Removed" : "Applied"} “${tag}” ${allHave ? "from" : "to"} ${n} file${n === 1 ? "" : "s"}.`,
+      };
+    });
+  }
+  function bulkDelete() {
+    const ids = [...checkedIds];
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} selected file${ids.length === 1 ? "" : "s"}? Removes the files and their search index. This cannot be undone.`)) return;
+    runBulk(async () => {
+      const r = await fetch("/api/files", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not delete files.");
+      setCheckedIds(new Set());
+      const n = typeof j.deleted === "number" ? j.deleted : ids.length;
+      return { count: n, note: `Deleted ${n} file${n === 1 ? "" : "s"}.` };
+    });
+  }
 
   // Page-wide drag & drop: window listeners so the drop target is the whole
   // content area (including empty space around/below the grid), not just the
@@ -228,14 +321,44 @@ export default function FilesPage() {
         </div>
       )}
       <PageHeader icon="files" title="Files" count={filtered.length} right={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1">
+            <input type="checkbox" checked={filtered.length > 0 && filtered.every((d) => checkedIds.has(d.id))}
+              onChange={toggleSelectAll} className="cbx" title="Select all shown files" aria-label="Select all shown files" />
+            <span className="text-[10px] text-slate-500 dark:text-zinc-400 whitespace-nowrap">Select All</span>
+          </span>
           <input className="input !w-56" placeholder="Search filename…" value={q} onChange={(e) => setQ(e.target.value)} />
           <input ref={fileRef} type="file" className="hidden" multiple onChange={upload} />
-          <button className="btn !py-1.5 flex items-center gap-1.5" disabled={uploading} onClick={() => fileRef.current?.click()} title="Upload a file">
-            <IconUpload /> {uploading ? "Uploading…" : "Upload File"}
-          </button>
+          {selectionMode ? (
+            <>
+              <span className="text-xs text-slate-500 dark:text-zinc-400 whitespace-nowrap">{checkedIds.size} selected</span>
+              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected files to a person"
+                onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("contactId", v); }}>
+                <option value="">Link Person…</option>
+                {peopleList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected files to a project"
+                onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("projectId", v); }}>
+                <option value="">Link Project…</option>
+                {projectsList.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </select>
+              <TagDropdown options={FILE_TAGS} onSelect={bulkModifyTag}
+                placeholder="Modify Tag…" pillClass={tagClasses}
+                triggerClass="!w-auto !h-7 !py-0 text-xs" disabled={bulkBusy}
+                title="Applies the tag to all selected files — or removes it if every selected already has it" />
+              <button className="btn !h-7 !py-0 px-3 text-xs !bg-red-600 hover:!bg-red-700 !text-white" disabled={bulkBusy} onClick={bulkDelete} title="Delete selected files">
+                {bulkBusy ? "Working…" : "Delete"}
+              </button>
+              <button className="btn-ghost text-xs" disabled={bulkBusy} onClick={() => { setCheckedIds(new Set()); setBulkMsg(""); }} title="Clear selection">✕ Clear</button>
+            </>
+          ) : (
+            <button className="btn !py-1.5 flex items-center gap-1.5" disabled={uploading} onClick={() => fileRef.current?.click()} title="Upload a file">
+              <IconUpload /> {uploading ? "Uploading…" : "Upload File"}
+            </button>
+          )}
         </div>
       } />
+      {!!bulkMsg && <div className="text-xs text-slate-500 dark:text-zinc-400 mb-2">{bulkMsg}</div>}
       <div className="flex flex-wrap gap-1.5 mb-3">
         <select className="input !w-auto text-xs" value={typeF} onChange={(e) => setTypeF(e.target.value)}>
           <option value="all">All types</option>
@@ -257,8 +380,10 @@ export default function FilesPage() {
       </div>
       {/* paperless-ngx style grid: up to 6 per row so detail lines fit fully */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-        {filtered.map((d) => (
-          <div key={d.id} className="card !rounded-xl !p-2.5 cursor-pointer hover:shadow-md hover:border-brand-500/50 dark:hover:border-brand-400/50 transition-all flex flex-col" onClick={() => setSel(d.id)}>
+        {filtered.map((d) => {
+          const checked = checkedIds.has(d.id);
+          return (
+          <div key={d.id} className={`card !rounded-xl !p-2.5 cursor-pointer hover:shadow-md hover:border-brand-500/50 dark:hover:border-brand-400/50 transition-all flex flex-col ${checked ? "!border-brand-500 ring-2 ring-brand-500/30" : ""}`} onClick={() => onCardClick(d.id)}>
             <Thumb d={d} />
             <div className="min-w-0 flex-1">
               <div className="font-medium text-xs truncate" title={d.filename}>{d.filename}</div>
@@ -275,12 +400,16 @@ export default function FilesPage() {
                 </div>
               )}
             </div>
-            <div className="flex gap-0.5 mt-1.5 -mb-1" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-0.5 mt-1.5 -mb-1" onClick={(e) => e.stopPropagation()}>
               <a className="icon-btn !p-1.5" title="Download" href={`/api/files/download?id=${d.id}`}><IconDownload /></a>
               <button className="icon-btn !p-1.5 text-red-500" title="Delete" onClick={() => del(d.id, d.filename)}><IconTrash /></button>
+              <input type="checkbox" checked={checked}
+                onChange={() => toggleChecked(d.id)}
+                className="cbx ml-auto" title={checked ? "Deselect file" : "Select file"} aria-label={`Select ${d.filename}`} />
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
       {!filtered.length && <div className="card text-sm text-slate-500 mt-3">No files yet — upload one above or drag & drop files anywhere on this page.</div>}
       {!!uploadErrors.length && (
@@ -288,7 +417,7 @@ export default function FilesPage() {
           {uploadErrors.map((e, i) => <div key={i}>{e}</div>)}
         </div>
       )}
-      <FileViewer id={sel} onClose={() => setSel(null)} onDeleted={() => { setSel(null); load(); }} onRelinked={load} />
+      {!selectionMode && <FileViewer id={sel} onClose={() => setSel(null)} onDeleted={() => { setSel(null); load(); }} onRelinked={load} />}
     </Shell>
   );
 }
