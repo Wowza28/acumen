@@ -1,9 +1,17 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Shell from "@/components/Shell";
 import PageHeader from "@/components/PageHeader";
+import { IconMeeting, IconPlus } from "@/components/icons";
 import EventDrawer from "@/components/EventDrawer";
 import EventEditor from "@/components/EventEditor";
+
+// Inline calendar icon (no IconCalendar exists in the project)
+const IconCalendar = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
 
 type Ev = {
   uid: string;
@@ -122,6 +130,16 @@ export default function EventsPage() {
     /* eslint-disable-next-line */
   }, []);
 
+  // Open week view by default on mobile
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) setView("week");
+  }, []);
+
+  // Ensure the page itself is scrolled to the top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   // group events by local day
   const byDay = useMemo(() => {
     const m = new Map<string, Ev[]>();
@@ -151,9 +169,27 @@ export default function EventsPage() {
   const common = { year, month, setMonth, setYear, years, load, loading, err, byDay, todayKey: dayKey(now), view, setView, onSelect: setSel, onCreateAt: (date: Date, hour: number) => setCreating({ date, hour }) };
   return (
     <>
-      {view === "week"
-        ? <WeekView {...common} weekDays={weekDays} shiftWeek={shiftWeek} />
-        : <MonthGrid {...common} cells={cells} shift={shift} />}
+      {/* Desktop: existing week/month grid views (unchanged) */}
+      <div className="md:block hidden">
+        {view === "week"
+          ? <WeekView {...common} weekDays={weekDays} shiftWeek={shiftWeek} />
+          : <MonthGrid {...common} cells={cells} shift={shift} />}
+      </div>
+
+      {/* Mobile: Titan-style vertical month list */}
+      <div className="md:hidden">
+        <MobileEventsView
+          events={events}
+          byDay={byDay}
+          todayKey={dayKey(now)}
+          onSelect={setSel}
+          onCreateAt={(date: Date, hour: number) => setCreating({ date, hour })}
+          load={load}
+          loading={loading}
+          err={err}
+        />
+      </div>
+
       {sel && <EventDrawer ev={sel} onClose={() => setSel(null)} onChanged={load} />}
       {creating && <EventEditor prefill={creating} onClose={() => setCreating(null)} onSaved={() => { setCreating(null); load(); }} />}
     </>
@@ -342,3 +378,294 @@ function AllDayRow({ weekDays, byDay, onSelect, gutter = WEEK_GUTTER }: { weekDa
 }
 
 
+
+// ============================================================================
+// Mobile-only: Titan-style vertical month list calendar
+// ============================================================================
+
+function MobileEventsView({ events, byDay, todayKey, onSelect, onCreateAt, load, loading, err }: any) {
+  const now = new Date();
+  const todayStr = todayKey;
+
+  // Center month state - the list shows 25 months from 1 year ago to 1 year ahead,
+  // with the current month scrolled to the top on load
+  const [centerYear, setCenterYear] = useState(now.getFullYear());
+  const [centerMonth, setCenterMonth] = useState(now.getMonth());
+
+  // Mini calendar state
+  const [miniOpen, setMiniOpen] = useState(false);
+  const [miniYear, setMiniYear] = useState(now.getFullYear());
+  const [miniMonth, setMiniMonth] = useState(now.getMonth());
+
+  // Scroll ref for the center month section
+  const currentMonthRef = useRef<HTMLDivElement>(null);
+  // Scroll ref for the panel itself (so we can scroll ONLY it, not the page)
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Scroll only the panel to the center month; keep the page at the top.
+  // (scrollIntoView would scroll ALL ancestors including the page.)
+  const scrollPanelToCenter = useCallback(() => {
+    window.scrollTo(0, 0);
+    const section = currentMonthRef.current;
+    const panel = panelRef.current;
+    if (!section || !panel) return;
+    const top = section.getBoundingClientRect().top - panel.getBoundingClientRect().top + panel.scrollTop;
+    panel.scrollTop = Math.max(0, top - 8); // scroll-mt-2 ≈ 8px gap
+  }, []);
+
+  // Group events by month key (YYYY-MM)
+  const eventsByMonth = useMemo(() => {
+    const m = new Map<string, Ev[]>();
+    for (const e of events) {
+      if (!e.start) continue;
+      const d = new Date(e.start);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(e);
+    }
+    return m;
+  }, [events]);
+
+  // Build 25 month sections: from centerMonth - 12 to centerMonth + 12
+  const sections = useMemo(() => {
+    const out: Array<{ y: number; m: number; label: string; range: string; events: Ev[] }> = [];
+    let total = centerYear * 12 + centerMonth - 12;
+    let y = Math.floor(total / 12);
+    let m = total % 12;
+    if (m < 0) { m += 12; y -= 1; }
+    for (let i = 0; i < 25; i++) {
+      const first = new Date(y, m, 1);
+      const last = new Date(y, m + 1, 0);
+      const key = `${y}-${String(m + 1).padStart(2, "0")}`;
+      out.push({
+        y, m,
+        label: first.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+        range: `${first.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })} – ${last.toLocaleDateString(undefined, { weekday: "short", day: "numeric" })}`,
+        events: eventsByMonth.get(key) || [],
+      });
+      total++;
+      y = Math.floor(total / 12);
+      m = total % 12;
+      if (m < 0) { m += 12; y -= 1; }
+    }
+    return out;
+  }, [centerYear, centerMonth, eventsByMonth]);
+
+  // Scroll center month to top on mount and whenever center changes
+  useEffect(() => {
+    scrollPanelToCenter();
+  }, [centerYear, centerMonth, scrollPanelToCenter]);
+
+  const miniDaysInMonth = new Date(miniYear, miniMonth + 1, 0).getDate();
+  const miniFirstDow = new Date(miniYear, miniMonth, 1).getDay();
+  const miniMonthLabel = new Date(miniYear, miniMonth, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+  const resetToToday = () => {
+    setCenterYear(now.getFullYear());
+    setCenterMonth(now.getMonth());
+    setMiniYear(now.getFullYear());
+    setMiniMonth(now.getMonth());
+    setMiniOpen(false);
+    // Direct scroll in case centerYear/centerMonth didn't change (effect won't fire)
+    scrollPanelToCenter();
+  };
+
+  if (err) return <div className="p-4 text-sm text-red-500">{err}</div>;
+
+  return (
+    <Shell wide>
+      {/* Sticky header pinned to top - full width background, single line */}
+      <div className="sticky top-0 z-40 bg-zinc-900 rounded-[1rem]">
+        <div className="flex items-center justify-between gap-2 px-4 py-2">
+          <h1 className="text-lg font-semibold tracking-tight flex items-center gap-2 min-w-0">
+            <span className="text-brand-500 dark:text-brand-400 shrink-0"><IconMeeting /></span>
+            <span className="truncate">Events</span>
+          </h1>
+          <div className="flex items-center gap-1">
+            <button className="icon-btn" title="Select month" onClick={() => { setMiniYear(centerYear); setMiniMonth(centerMonth); setMiniOpen(true); }}>
+              <IconCalendar className="w-5 h-5" />
+            </button>
+            <button className="icon-btn" title="Reset to today" onClick={resetToToday}>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+            <button className="icon-btn" title="New event" onClick={() => onCreateAt(now, now.getHours())}>
+              <IconPlus className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Scrollable month panel - fills remaining screen height */}
+      <div ref={panelRef} className="h-[calc(100vh-112px)] overflow-y-auto overflow-x-hidden">
+        <div className="space-y-6 pb-20">
+          {sections.map((section) => {
+            const isCurrentMonth = section.y === now.getFullYear() && section.m === now.getMonth();
+            const daysWithEvents = new Set<string>();
+            section.events.forEach((e) => {
+              if (e.start) {
+                const d = new Date(e.start);
+                daysWithEvents.add(dayKey(d));
+              }
+            });
+
+            const daysToShow = Array.from(daysWithEvents);
+            if (isCurrentMonth && !daysWithEvents.has(todayStr)) {
+              daysToShow.push(todayStr);
+            }
+            daysToShow.sort();
+
+            const eventsByDay = new Map<string, Ev[]>();
+            section.events.forEach((e) => {
+              if (e.start) {
+                const k = dayKey(new Date(e.start));
+                if (!eventsByDay.has(k)) eventsByDay.set(k, []);
+                eventsByDay.get(k)!.push(e);
+              }
+            });
+
+            // Attach ref to center month section for scroll
+            const sectionRef =
+              section.y === centerYear && section.m === centerMonth
+                ? currentMonthRef
+                : undefined;
+
+            if (daysToShow.length === 0 && !isCurrentMonth) {
+              return (
+                <div key={`${section.y}-${section.m}`} className="px-4 scroll-mt-2" ref={sectionRef}>
+                  <div className="text-xl font-semibold text-slate-200 mb-1">{section.label}</div>
+                  <div className="text-sm text-slate-400 mb-3">{section.range}</div>
+                  <div
+                    className="card p-4 text-slate-400 text-sm text-center cursor-pointer"
+                    onClick={() => onCreateAt(new Date(section.y, section.m, 1), 9)}
+                  >
+                    No events. Tap to create.
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div key={`${section.y}-${section.m}`} className="px-4 scroll-mt-2" ref={sectionRef}>
+                <div className="text-xl font-semibold text-slate-200 mb-1">{section.label}</div>
+                <div className="text-sm text-slate-400 mb-3">{section.range}</div>
+                <div className="space-y-2">
+                  {daysToShow.map((dayKeyStr) => {
+                    const dayEvents = eventsByDay.get(dayKeyStr) || [];
+                    const isToday = dayKeyStr === todayStr;
+                    const dayDate = new Date(dayKeyStr);
+                    const dow = dayDate.toLocaleDateString(undefined, { weekday: "short" });
+
+                    return (
+                      <div
+                        key={dayKeyStr}
+                        className="card cursor-pointer"
+                        onClick={() => {
+                          if (dayEvents.length === 0) onCreateAt(dayDate, dayDate.getHours());
+                        }}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Date on left */}
+                          <div className={`flex-shrink-0 flex flex-col items-center gap-0.5 ${isToday ? "text-brand-500" : "text-slate-400"}`}>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${isToday ? "bg-brand-500 text-white" : "text-slate-600 dark:text-zinc-400"}`}>
+                              {dayDate.getDate()}
+                            </div>
+                            <div className="text-[10px]">{dow}</div>
+                          </div>
+
+                          {/* Event content on right */}
+                          <div className="flex-1">
+                            {dayEvents.length > 0 ? (
+                              dayEvents.map((e, ei) => (
+                                <div
+                                  key={e.uid}
+                                  onClick={(ev) => { ev.stopPropagation(); onSelect?.(e); }}
+                                  className="rounded-lg px-3 py-2 bg-brand-500/15 text-brand-700 dark:text-brand-300 border-l-2 border-brand-500 cursor-pointer hover:bg-brand-500/25"
+                                >
+                                  <div className="font-medium text-sm truncate">{e.summary || "(no title)"}</div>
+                                  {!e.allDay && e.start && (
+                                    <div className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">{timeOf(e.start)}</div>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <div
+                                className="p-3 text-slate-400 text-sm text-center cursor-pointer"
+                                onClick={(ev) => { ev.stopPropagation(); onCreateAt(dayDate, dayDate.getHours()); }}
+                              >
+                                Nothing planned. Tap to create.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Mini month calendar floating panel */}
+      {miniOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={() => setMiniOpen(false)}>
+          <div className="absolute inset-y-0 left-0 w-full md:w-80 bg-zinc-900 border-r border-zinc-800 p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <button className="icon-btn" onClick={() => {
+                const newM = miniMonth === 0 ? 11 : miniMonth - 1;
+                const newY = newM === 11 ? miniYear - 1 : miniYear;
+                setMiniYear(newY);
+                setMiniMonth(newM);
+              }}>‹</button>
+              <span className="font-medium">{miniMonthLabel}</span>
+              <button className="icon-btn" onClick={() => {
+                const newM = miniMonth === 11 ? 0 : miniMonth + 1;
+                const newY = newM === 0 ? miniYear + 1 : miniYear;
+                setMiniYear(newY);
+                setMiniMonth(newM);
+              }}>›</button>
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-[10px] text-slate-400 font-medium mb-2">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
+                <div key={d} className="text-center">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {/* Leading blanks */}
+              {Array.from({ length: miniFirstDow }).map((_, i) => (
+                <div key={i} className="h-8" />
+              ))}
+              {/* Days */}
+              {Array.from({ length: miniDaysInMonth }, (_, i) => {
+                const d = i + 1;
+                const date = new Date(miniYear, miniMonth, d);
+                const isToday = dayKey(date) === todayStr;
+                return (
+                  <button
+                    key={d}
+                    onClick={() => {
+                      setCenterYear(date.getFullYear());
+                      setCenterMonth(date.getMonth());
+                      setMiniOpen(false);
+                    }}
+                    className={`h-8 w-8 rounded-full flex items-center justify-center text-sm ${isToday ? "bg-brand-500 text-white" : ""}`}
+                  >
+                    {d}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-4">
+              <button className="w-full btn-ghost text-sm" onClick={() => setMiniOpen(false)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Shell>
+  );
+}
