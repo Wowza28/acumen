@@ -99,38 +99,43 @@ export default function NotesPage() {
 
   return (
     <Shell wide>
-      <PageHeader icon="notes" title="Notes" count={filtered.length} right={
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1">
+      <PageHeader icon="notes" title="Notes" count={filtered.length}
+        search={{ value: q, onChange: (v) => setQ(v), placeholder: "Search notes…" }}
+        actions={<>
+          <span className="hidden md:flex items-center gap-1">
             <input type="checkbox" checked={filtered.length > 0 && filtered.every((n) => checkedIds.has(n.id))}
               onChange={toggleSelectAll} className="cbx" title="Select all shown notes" aria-label="Select all shown notes" />
             <span className="text-[10px] text-slate-500 dark:text-zinc-400 whitespace-nowrap">Select All</span>
           </span>
-          <input className="input !w-56" placeholder="Search notes…" value={q} onChange={(e) => setQ(e.target.value)} />
           {selectionMode ? (
             <>
-              <span className="text-xs text-slate-500 dark:text-zinc-400 whitespace-nowrap">{checkedIds.size} selected</span>
-              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected notes to a person"
+              <span className="hidden md:inline text-xs text-slate-500 dark:text-zinc-400 whitespace-nowrap">{checkedIds.size} selected</span>
+              <select className="input !w-full md:!w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected notes to a person"
                 onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("contactId", v); }}>
                 <option value="">Link Person…</option>
                 {peopleList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
-              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected notes to a project"
+              <select className="input !w-full md:!w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected notes to a project"
                 onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("projectId", v); }}>
                 <option value="">Link Project…</option>
                 {projectsList.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
               </select>
-              <button className="btn !h-7 !py-0 px-3 text-xs !bg-red-600 hover:!bg-red-700 !text-white" disabled={bulkBusy} onClick={bulkDelete} title="Delete selected notes">
+              <button className="btn !w-full md:!w-auto !h-7 !py-0 px-3 text-xs !bg-red-600 hover:!bg-red-700 !text-white" disabled={bulkBusy} onClick={bulkDelete} title="Delete selected notes">
                 {bulkBusy ? "Working…" : "Delete"}
               </button>
-              <button className="btn-ghost text-xs" disabled={bulkBusy} onClick={() => { setCheckedIds(new Set()); setBulkMsg(""); }} title="Clear selection">✕ Clear</button>
+              <button className="btn-ghost !w-full md:!w-auto !h-7 !py-0 px-3 text-xs rounded-xl md:!rounded-lg border border-slate-200 dark:border-zinc-700 md:border-0" disabled={bulkBusy} onClick={() => { setCheckedIds(new Set()); setBulkMsg(""); }} title="Cancel selection">Cancel</button>
             </>
           ) : (
-            <button className="btn !py-1.5 flex items-center gap-1.5" onClick={() => setAdding(true)}><span className="text-base leading-none">+</span> Add</button>
+            <button className="btn !py-1.5 w-full md:w-auto col-span-2 md:col-span-1 flex items-center justify-center gap-1.5" onClick={() => setAdding(true)}><span className="text-base leading-none">+</span> Add</button>
           )}
-        </div>
-      } />
+        </>} />
       {!!bulkMsg && <div className="text-xs text-slate-500 dark:text-zinc-400 mb-2">{bulkMsg}</div>}
+      {/* Mobile: Select All toggle above the cards (same position as the Tasks page) */}
+      <label className="flex items-center gap-2 mb-3 md:hidden cursor-pointer">
+        <input type="checkbox" className="cbx" checked={filtered.length > 0 && filtered.every((n) => checkedIds.has(n.id))}
+          onChange={toggleSelectAll} title="Select all shown notes" aria-label="Select all shown notes" />
+        <span className="text-sm text-slate-500 dark:text-zinc-400">Select All</span>
+      </label>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {filtered.map((n) => {
           const checked = checkedIds.has(n.id);

@@ -80,6 +80,13 @@ export default function TasksPage() {
 
   // ---- bulk selection + actions ----
   const allShownChecked = sorted.length > 0 && sorted.every((t) => checkedIds.has(t.id));
+  // Selection mode: once any card is checked, tapping a card toggles it
+  // instead of opening the editor (same pattern as Notes/Files pages).
+  const selectionMode = checkedIds.size > 0;
+  function onCardClick(id: string) {
+    if (selectionMode) toggleChecked(id);
+    else setSelId(id);
+  }
   function toggleSelectAll() {
     setCheckedIds(allShownChecked ? new Set() : new Set(sorted.map((t) => t.id)));
   }
@@ -149,48 +156,48 @@ export default function TasksPage() {
 
   return (
     <Shell wide>
-      <PageHeader icon="tasks" title="Tasks" count={filtered.length} right={
-        <div className="flex flex-wrap items-center gap-2">
-          <input className="input !w-56" placeholder="Search tasks…" value={q} onChange={(e) => setQ(e.target.value)} />
-          {checkedIds.size ? (
+      <PageHeader icon="tasks" title="Tasks" count={filtered.length}
+        search={{ value: q, onChange: setQ, placeholder: "Search tasks…" }}
+        actions={
+          checkedIds.size ? (
             <>
-              <span className="text-xs text-slate-500 dark:text-zinc-400 whitespace-nowrap">{checkedIds.size} selected</span>
-              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected tasks to a person"
+              {/* Desktop-only count so the mobile grid stays exactly 6 cells / 3 rows */}
+              <span className="hidden md:inline text-xs text-slate-500 dark:text-zinc-400 whitespace-nowrap">{checkedIds.size} selected</span>
+              <select className="input !w-full md:!w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected tasks to a person"
                 onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("contactId", v); }}>
                 <option value="">Link Person…</option>
                 {peopleList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
-              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected tasks to a project"
+              <select className="input !w-full md:!w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected tasks to a project"
                 onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("projectId", v); }}>
                 <option value="">Link Project…</option>
                 {projectsList.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
               </select>
-              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Set status for selected tasks"
+              <select className="input !w-full md:!w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Set status for selected tasks"
                 onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkSet("status", v); }}>
                 <option value="">Set Status…</option>
                 <option value="todo">To-do</option>
                 <option value="in-progress">In progress</option>
                 <option value="done">Done</option>
               </select>
-              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Set priority for selected tasks"
+              <select className="input !w-full md:!w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Set priority for selected tasks"
                 onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkSet("priority", v); }}>
                 <option value="">Set Priority…</option>
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
               </select>
-              <button className="btn !h-7 !py-0 px-3 text-xs !bg-red-600 hover:!bg-red-700 !text-white" disabled={bulkBusy} onClick={bulkDelete} title="Delete selected tasks">
+              <button className="btn !w-full md:!w-auto !h-7 !py-0 px-3 text-xs !bg-red-600 hover:!bg-red-700 !text-white" disabled={bulkBusy} onClick={bulkDelete} title="Delete selected tasks">
                 {bulkBusy ? "Working…" : "Delete"}
               </button>
-              <button className="btn-ghost text-xs" disabled={bulkBusy} onClick={() => { setCheckedIds(new Set()); setBulkMsg(""); }} title="Clear selection">Cancel</button>
+              <button className="btn-ghost !w-full md:!w-auto !h-7 !py-0 text-xs rounded-xl md:!rounded-lg border border-slate-200 dark:border-zinc-700 md:border-0" disabled={bulkBusy} onClick={() => { setCheckedIds(new Set()); setBulkMsg(""); }} title="Clear selection">Cancel</button>
             </>
           ) : (
-            <button className="btn !py-1.5 flex items-center gap-1.5" onClick={() => setAdding(true)}><span className="text-base leading-none">+</span> Add</button>
-          )}
-        </div>
-      } />
+            <button className="btn !py-1.5 flex items-center justify-center gap-1.5 col-span-2" onClick={() => setAdding(true)}><span className="text-base leading-none">+</span> Add</button>
+          )
+        } />
       {!!bulkMsg && <div className="text-xs text-slate-500 dark:text-zinc-400 mb-2">{bulkMsg}</div>}
-      <div className="card !p-0 overflow-x-auto">
+      <div className="card !p-0 overflow-x-auto hidden md:block">
         <table className="w-full text-sm">
           <thead><tr className="text-left text-xs text-slate-400 border-b border-slate-200 dark:border-zinc-800">
             <th className="px-3 py-2 w-8">
@@ -223,7 +230,45 @@ export default function TasksPage() {
         </table>
         {!filtered.length && <div className="p-4 text-sm text-slate-500">{list.length ? "No tasks match your search." : "No tasks yet."}</div>}
       </div>
-      {selId && <TaskEditor id={selId} onClose={() => setSelId(null)} onSaved={() => { setSelId(null); load(); }} onDeleted={() => { setSelId(null); load(); }} />}
+
+      {/* Mobile: Select All + sort buttons, then task cards */}
+      <div className="flex items-center justify-between mb-3 md:hidden">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" className="cbx" checked={allShownChecked} onChange={toggleSelectAll}
+            title="Select all shown tasks" aria-label="Select all shown tasks" />
+          <span className="text-sm text-slate-500 dark:text-zinc-400">Select All</span>
+        </label>
+        <div className="flex items-center gap-0.5">
+          <span className="text-sm text-slate-500 dark:text-zinc-400 mr-1">Sort:</span>
+          <button className="btn-ghost !px-2 !py-1 text-sm" onClick={() => toggleSort("priority")}
+            title="Sort by priority">P {arrow("priority")}</button>
+          <button className="btn-ghost !px-2 !py-1 text-sm" onClick={() => toggleSort("dueAt")}
+            title="Sort by due date">D {arrow("dueAt")}</button>
+        </div>
+      </div>
+      <div className="md:hidden space-y-3">
+        {sorted.map((t) => {
+          const checked = checkedIds.has(t.id);
+          return (
+            <div key={t.id} className={`card !p-4 cursor-pointer ${checked ? "!border-brand-500 ring-2 ring-brand-500/30" : ""}`}
+              onClick={() => onCardClick(t.id)}>
+              <div className="text-base font-semibold leading-snug">{t.title}</div>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <Tag v={t.status} map={STATUS_STYLE} />
+                <Tag v={t.priority} map={PRIORITY_STYLE} />
+              </div>
+              <div className="flex items-center justify-between mt-3">
+                <span className="text-sm text-slate-500 dark:text-zinc-400">{fmtDue(t.dueAt)}</span>
+                <input type="checkbox" className="cbx" checked={checked} onChange={() => toggleChecked(t.id)}
+                  onClick={(e) => e.stopPropagation()} aria-label={`Select ${t.title || "task"}`} />
+              </div>
+            </div>
+          );
+        })}
+        {!filtered.length && <div className="card text-sm text-slate-500">{list.length ? "No tasks match your search." : "No tasks yet."}</div>}
+      </div>
+
+      {!selectionMode && selId && <TaskEditor id={selId} onClose={() => setSelId(null)} onSaved={() => { setSelId(null); load(); }} onDeleted={() => { setSelId(null); load(); }} />}
       {adding && <TaskEditor id={null} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }} />}
     </Shell>
   );
