@@ -26,23 +26,23 @@ export default function Settings({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 max-md:p-2">
       <div className="absolute inset-0 bg-black/80" onClick={onClose} aria-hidden />
-      <div className="relative w-full max-w-[1000px] bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[754px] max-h-[90vh]" role="dialog" aria-label="Settings">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800 shrink-0 bg-white dark:bg-zinc-900">
+      <div className="relative w-full max-w-[1000px] bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[754px] max-h-[90vh] max-md:h-[92dvh] max-md:max-h-[92dvh] max-md:rounded-xl" role="dialog" aria-label="Settings">
+        <div className="flex items-center justify-between px-6 max-md:px-4 py-4 max-md:py-3 border-b border-slate-100 dark:border-zinc-800 shrink-0 bg-white dark:bg-zinc-900">
           <h2 className="text-base font-semibold">Settings</h2>
           <button className="icon-btn" onClick={onClose} title="Close"><IconX /></button>
         </div>
-        <div className="flex flex-1 min-h-0">
-          <nav className="w-48 shrink-0 border-r border-slate-100 dark:border-zinc-800 p-3 flex flex-col gap-1 bg-slate-50 dark:bg-zinc-950">
+        <div className="flex flex-1 min-h-0 max-md:flex-col">
+          <nav className="w-48 max-md:w-full shrink-0 border-r max-md:border-r-0 max-md:border-b border-slate-100 dark:border-zinc-800 p-3 max-md:p-2 flex max-md:flex-row flex-col gap-1 bg-slate-50 dark:bg-zinc-950">
             {tabs.map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`text-left px-3 py-2 rounded-xl text-sm ${tab === t.id ? "navitem-active" : "navitem"}`}>
+                className={`text-left max-md:text-center max-md:flex-1 px-3 max-md:px-2 py-2 rounded-xl text-sm ${tab === t.id ? "navitem-active" : "navitem"}`}>
                 {t.label}
               </button>
             ))}
           </nav>
-          <div className="flex-1 min-w-0 p-6 text-sm overflow-y-auto bg-white dark:bg-zinc-900">
+          <div className="flex-1 min-w-0 p-6 max-md:p-4 text-sm overflow-y-auto bg-white dark:bg-zinc-900">
             {tab === "general" ? <GeneralTab /> : tab === "assistant" ? <AssistantTab /> : <AccountsTab />}
           </div>
         </div>
@@ -120,7 +120,7 @@ function GeneralTab() {
   return (
     <div className="flex flex-col gap-5">
       <section>
-        <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="flex items-center justify-between gap-3 max-md:gap-2 mb-1">
           <b className={titanConfigured === false ? "text-slate-400 dark:text-zinc-500" : ""}>Refresh mail</b>
           <button className="btn !py-1 !px-3 text-xs" onClick={refreshMail}
             disabled={mail.busy || titanConfigured === false}
@@ -140,7 +140,7 @@ function GeneralTab() {
       </section>
 
       <section className="border-t border-slate-100 dark:border-zinc-800 pt-4">
-        <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="flex items-center justify-between gap-3 max-md:gap-2 mb-1">
           <b className={titanConfigured === false ? "text-slate-400 dark:text-zinc-500" : ""}>Refresh calendar</b>
           <button className="btn !py-1 !px-3 text-xs" onClick={refreshCalendar}
             disabled={cal.busy || titanConfigured === false}
@@ -160,16 +160,16 @@ function GeneralTab() {
       </section>
 
       <section className="border-t border-slate-100 dark:border-zinc-800 pt-4">
-        <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="flex items-center justify-between gap-3 max-md:gap-2 mb-1">
           <b>USD to AED exchange rate</b>
           <button className="btn !py-1 !px-3 text-xs" onClick={saveRate} disabled={rateBusy}>
             {rateBusy ? "Saving…" : "Save"}
           </button>
         </div>
         <p className="text-slate-500 dark:text-zinc-400 text-xs leading-relaxed mb-2">One USD equals this many AED. Used for the Accounts graph.</p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm">1 USD =</span>
-          <input className="input !w-32" type="number" min="0.0001" step="0.01" value={rate}
+          <input className="input !w-32 max-md:!w-full max-md:max-w-[160px]" type="number" min="0.0001" step="0.01" value={rate}
             onChange={(e) => setRate(e.target.value)} aria-label="USD to AED exchange rate" />
           <span className="text-sm">AED</span>
         </div>
@@ -279,7 +279,7 @@ function AssistantTab() {
           />
         </section>
       ))}
-      <div className="flex items-center gap-3 pt-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pt-1">
         <button className="btn !py-1.5 text-xs" onClick={save} disabled={busy}>{busy ? "Saving…" : "Save"}</button>
         {msg && <span className="text-xs text-slate-500 dark:text-zinc-400">{msg}</span>}
       </div>
@@ -348,7 +348,7 @@ function AccountsTab() {
         </p>
 
         {acct?.configured && !editing && (
-          <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-zinc-700 px-3 py-2.5">
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-zinc-700 px-3 py-2.5 max-md:flex-wrap">
             <span className="text-brand-500"><IconMeeting /></span>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium truncate">{acct.email}</div>
@@ -374,7 +374,7 @@ function AccountsTab() {
             <label className="text-xs font-medium" htmlFor="titan-pass">Password</label>
             <input id="titan-pass" className="input" type="password" autoComplete="new-password" placeholder="••••••••"
               value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               <button className="btn !py-1.5 text-xs" onClick={save} disabled={busy || !form.email || !form.password}>
                 {busy ? "Verifying…" : "Link account"}
               </button>
