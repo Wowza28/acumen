@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     const links = await prisma.transactionLink.findMany({
       where,
       include: { transaction: true },
-      orderBy: [{ transaction: { transactionDate: "desc" } }],
+      orderBy: [{ transaction: { transactionDate: "desc" } }, { transaction: { seq: "desc" } }],
     });
     const transactions = links.map((l) => l.transaction);
     return NextResponse.json({ links, transactions });

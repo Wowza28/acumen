@@ -19,4 +19,6 @@ export type Transaction = {
   balance: number | null;
   notes: string | null;
   tags?: string | null;
+  /** Statement row order (chronological within a day). Legacy rows: 0. */
+  seq?: number;
 };

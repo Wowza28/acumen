@@ -176,6 +176,11 @@ model Transaction {
   balance          Float?
   notes            String?
   tags             String            @default("[]")
+  // Statement row order: CSV rows are chronological (oldest→newest down the
+  // file). Same-day rows share an identical transactionDate (and, for
+  // createMany, an identical createdAt), so this explicit sequence number —
+  // assigned at import — is the tie-breaker that keeps their order stable.
+  seq              Int               @default(0)
   createdAt        DateTime          @default(now())
   transactionLinks TransactionLink[]
 

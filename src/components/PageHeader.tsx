@@ -12,7 +12,7 @@ const MAP: Record<string, any> = {
   accounts: IconAccounts
 };
 
-export default function PageHeader({ icon, title, count, right, search, actions }: {
+export default function PageHeader({ icon, title, count, right, search, actions, searchInputClass, desktopClusterClass, mobileActionsClass }: {
   icon: keyof typeof MAP;
   title: string;
   count?: number;
@@ -25,6 +25,11 @@ export default function PageHeader({ icon, title, count, right, search, actions 
   /** Buttons/actions: inline next to the search on desktop, moved to their own
    *  row below the title on mobile. */
   actions?: React.ReactNode;
+  /** Optional class overrides for the responsive path only. Defaults reproduce
+   *  the standard layout exactly, so pages that don't pass them are untouched. */
+  searchInputClass?: string;
+  desktopClusterClass?: string;
+  mobileActionsClass?: string;
 }) {
   const Icon = MAP[icon];
   const [searchOpen, setSearchOpen] = useState(false);
@@ -42,8 +47,8 @@ export default function PageHeader({ icon, title, count, right, search, actions 
 
         {/* Desktop (md+): inline search input + actions, exactly as before */}
         {search && (
-          <div className="hidden md:flex items-center gap-2 shrink-0">
-            <input className="input !w-48" placeholder={search.placeholder || "Search…"}
+          <div className={desktopClusterClass || "hidden md:flex items-center gap-2 shrink-0"}>
+            <input className={searchInputClass || "input !w-48"} placeholder={search.placeholder || "Search…"}
               value={search.value} onChange={(e) => search.onChange(e.target.value)} />
             {actions}
           </div>
@@ -72,7 +77,7 @@ export default function PageHeader({ icon, title, count, right, search, actions 
 
       {/* Mobile: actions get their own full-width row below the title / search */}
       {search && actions && (
-        <div className="mt-2 grid grid-cols-2 gap-2 md:hidden">{actions}</div>
+        <div className={mobileActionsClass || "mt-2 grid grid-cols-2 gap-2 md:hidden"}>{actions}</div>
       )}
     </div>
   );

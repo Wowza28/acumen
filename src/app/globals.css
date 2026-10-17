@@ -135,3 +135,48 @@ body { @apply bg-white text-slate-900 dark:bg-zinc-950 dark:text-zinc-100; }
     border-width: 2px;
   }
 }
+
+/* Mobile Files grid: single column in portrait, two columns in landscape.
+ * Scoped to .files-grid and max-width: 767px so the PC grid (md:grid-cols-4
+ * and up) is never affected — mobile overrides must come AFTER Tailwind's
+ * sm: breakpoint to win over grid-cols-2/sm:grid-cols-3 in the cascade. */
+@media (max-width: 767px) and (orientation: portrait) {
+  .files-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+@media (max-width: 767px) and (orientation: landscape) {
+  .files-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* Mobile Accounts: the graph SVG uses a fixed 1160px viewBox, so phone text
+ * shrinks ~3x. These mobile-only rules bump ONLY the axis numbers (.ag-x /
+ * .ag-y) to a big readable size (44 user units ≈ 12px rendered) in white —
+ * value/legend text stays at PC scale so nothing collides. The legend is
+ * forced onto a single compact line. Only max-width: 767px so the PC render
+ * is untouched. */
+@media (max-width: 767px) {
+  .accounts-graph svg text.ag-x,
+  .accounts-graph svg text.ag-y {
+    font-size: 44px !important;
+    fill: #ffffff !important;
+  }
+  /* Light theme: white would be invisible on white cards — keep them dark. */
+  html:not(.dark) .accounts-graph svg text.ag-x,
+  html:not(.dark) .accounts-graph svg text.ag-y {
+    fill: #1e293b !important;
+  }
+  .accounts-legend {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    justify-content: space-between !important;
+    gap: 2px 6px !important;
+    font-size: 11px !important;
+    /* 6px above the legend = a few extra pixels between the mode buttons
+       and the top of the legend. */
+    padding: 6px 0 4px 0 !important;
+    white-space: nowrap;
+  }
+}

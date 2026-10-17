@@ -109,7 +109,14 @@ export async function POST(req: NextRequest) {
       existingRefs.add(r.referenceNumber);
       return true;
     });
-    const result = fresh.length ? await prisma.transaction.createMany({ data: fresh }) : { count: 0 };
+    // Statement rows are chronological top-to-bottom. Same-day rows share an
+    // identical transactionDate/createdAt, so persist the file-row order in
+    // `seq` (globally monotonic across uploads) — every consumer tie-breaks
+    // on it to keep intra-day order stable.
+    const baseSeq = ((await prisma.transaction.aggregate({ _max: { seq: true } }))._max?.seq ?? 0) + 1;
+    const result = fresh.length
+      ? await prisma.transaction.createMany({ data: fresh.map((r, i) => ({ ...r, seq: baseSeq + i })) })
+      : { count: 0 };
     return NextResponse.json({ imported: result.count, skipped, duplicates });
   } catch (e: any) {
     console.error("[transactions/import]", e);

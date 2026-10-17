@@ -17,6 +17,12 @@ export type Bucket = {
   outflow: number;
   balance: number;
   vat?: number;
+  /** Exclusion-aware, VAT-inclusive sums per side (quarter mode only):
+   *  inflow/outflow WITHOUT the transactions covered by an exclusion rule.
+   *  The filings table derives Credits/Debits from these so they reconcile
+   *  with the VAT line: vatDue === (vatInflow - vatOutflow) x VAT_RATE. */
+  vatInflow?: number;
+  vatOutflow?: number;
 };
 
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -153,7 +159,9 @@ export function buildBuckets(
           : quarterLabel(k);
     out.push({
       key: k, label, fullLabel, inflow, outflow, balance,
-      ...(mode === "quarter" ? { vat: VAT_RATE * (vatInflow - vatOutflow) } : {}),
+      ...(mode === "quarter"
+        ? { vat: VAT_RATE * (vatInflow - vatOutflow), vatInflow, vatOutflow }
+        : {}),
     });
   }
   return out;
@@ -161,7 +169,7 @@ export function buildBuckets(
 
 export function fmtMoney(v: number, currency: string) {
   const sign = v < 0 ? "-" : "";
-  return `${sign}${currency} ${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${currency} ${sign}${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /** Smooth morph: resample previous buckets onto the new axis, then tween. */
@@ -244,8 +252,32 @@ export default function AccountsGraph({
   vatExclusions?: VatExclusionRule[];
 }) {
   const buckets = useMemo(() => buildBuckets(transactions, mode, display, rate, vatExclusions), [transactions, mode, display, rate, vatExclusions]);
+  // Mobile shows the exact same full dataset as PC (no truncation) — the
+  // detail readout moves to an HTML card below the graph instead.
   const shown = useTweenedBuckets(buckets);
   const [hover, setHover] = useState<number | null>(null);
+  // Two separate flags so layout always agrees with the CSS breakpoint and
+  // tap handling always follows the actual pointer:
+  //  - narrow: max-width 767px → square layout, rotated/bigger axis labels
+  //    (matches the mobile CSS rules in globals.css exactly).
+  //  - coarse: touch pointer → tap handlers (synthesized mousemove on tap
+  //    would otherwise pre-set hover and the click toggle cancels itself).
+  // Both start false so SSR hydration matches, then flip after mount.
+  const [narrow, setNarrow] = useState(false);
+  const [coarse, setCoarse] = useState(false);
+  // Mobile tap/drag: ref to the details card (scroll it into view on tap)
+  // and a drag flag so pointermove updates live while the finger is down.
+  const detailRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef(false);
+  useEffect(() => {
+    const wq = window.matchMedia("(max-width: 767px)");
+    const pq = window.matchMedia("(pointer: coarse)");
+    const apply = () => { setNarrow(wq.matches); setCoarse(pq.matches); };
+    apply();
+    wq.addEventListener("change", apply);
+    pq.addEventListener("change", apply);
+    return () => { wq.removeEventListener("change", apply); pq.removeEventListener("change", apply); };
+  }, []);
 
   const hasVat = mode === "quarter";
   const maxFlow = Math.max(1, ...shown.map((b) => Math.max(b.inflow, b.outflow)));
@@ -254,7 +286,18 @@ export default function AccountsGraph({
   const maxLine = Math.max(0, ...allLine);
   const span = Math.max(1e-9, maxLine - minLine);
 
-  const iw = W - PAD.l - PAD.r;
+  // Mobile-only geometry (PC keeps the exact original constants): wider left
+  // pad so the bigger axis numbers fit, a tall label band for rotated x
+  // labels, and a plot height chosen so the viewBox ends up SQUARE (H === W,
+  // 1160x1160) — the graph renders as a square on the phone.
+  // Narrow: bigger top pad so the 44px white top y-number isn't clipped at
+  // the viewBox edge, and a left pad that fits the numbers snugly (graph
+  // doesn't have to be a perfect square). Plot height still chosen so
+  // H === W (near-square) on narrow screens.
+  const PT = narrow ? 110 : PAD.t;
+  const PL = narrow ? 160 : PAD.l;
+  const LH = narrow ? 330 : LABEL_H;
+  const iw = W - PL - PAD.r;
   // Plot (line + inflow) is fixed height. The outflow zone scales with the
   // longest outflow bar so labels always sit below it: total height grows,
   // the plot itself never moves.
@@ -262,18 +305,19 @@ export default function AccountsGraph({
   const outZoneH = maxOutflow > 0
     ? Math.min(OUT_MAX, Math.max(40, (maxOutflow / maxFlow) * 165))
     : 0;
-  const H = PAD.t + PLOT_H + outZoneH + LABEL_H;
-  const barH = PLOT_H;
-  const zeroY = PAD.t + ((maxLine - 0) / span) * barH;
-  const baseY = PAD.t + barH;
+  const plotH = narrow ? W - PT - outZoneH - LH : PLOT_H;
+  const H = PT + plotH + outZoneH + LH; // narrow: exactly W → near-square
+  const barH = plotH;
+  const zeroY = PT + ((maxLine - 0) / span) * barH;
+  const baseY = PT + barH;
   const labelY = baseY + outZoneH + 20;
   const showBalDots = mode !== "day";
   const n = Math.max(1, shown.length);
   const slot = iw / n;
   const barW = Math.max(1.5, Math.min(46, slot * 0.62));
 
-  const x = (i: number) => PAD.l + slot * i + slot / 2;
-  const yLine = (v: number) => PAD.t + ((maxLine - v) / span) * barH;
+  const x = (i: number) => PL + slot * i + slot / 2;
+  const yLine = (v: number) => PT + ((maxLine - v) / span) * barH;
   const hFlow = (v: number) => (v / maxFlow) * (barH * 0.42);
   const hOut = (v: number) => (outZoneH > 0 && maxOutflow > 0 ? (v / maxOutflow) * (outZoneH - 8) : 0);
 
@@ -298,9 +342,9 @@ export default function AccountsGraph({
   const vatPath = linePath((b) => b.vat || 0);
 
   return (
-    <div className="w-full select-none">
+    <div className="w-full select-none accounts-graph">
       {!empty && (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-1 pb-2 text-xs text-slate-500 dark:text-zinc-400">
+        <div className="accounts-legend flex flex-wrap items-center gap-x-5 gap-y-1 px-1 pb-2 text-xs text-slate-500 dark:text-zinc-400">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500/80" /> Inflow
           </span>
@@ -312,29 +356,60 @@ export default function AccountsGraph({
           </span>
           {hasVat && (
             <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block w-4 h-0.5 rounded bg-amber-500" /> VAT (5/105 x net, VAT-inclusive)
+              <span className="inline-block w-4 h-0.5 rounded bg-amber-500" />
+              <span className="max-md:hidden">VAT (5/105 x net, VAT-inclusive)</span>
+              <span className="md:hidden">VAT</span>
             </span>
           )}
-          <span className="ml-auto">All values in {display}</span>
+          {/* PC caption (unchanged). Mobile captions removed — not needed. */}
+          <span className="ml-auto max-md:hidden">All values in {display}</span>
         </div>
       )}
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        style={{ width: "100%", height: "auto", display: "block" }}
+        style={{ width: "100%", height: "auto", display: "block", touchAction: "pan-y" }}
         role="img"
         aria-label={`Cashflow graph in ${display}`}
-        onMouseLeave={() => setHover(null)}
+        onMouseLeave={() => { if (!coarse) setHover(null); }}
+        onPointerDown={(e) => {
+          if (!coarse || empty) return;
+          const bb = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+          const vx = ((e.clientX - bb.left) / bb.width) * W;
+          const i = Math.floor((vx - PL) / slot);
+          if (i < 0 || i >= shown.length) { setHover(null); return; }
+          dragRef.current = true;
+          setHover(i);
+          // Tap: scroll the PAGE to the bottom so the details card (the last
+          // element on Summary) is on screen — a no-op when already there.
+          requestAnimationFrame(() => {
+            const bottom = Math.max(
+              document.documentElement.scrollHeight,
+              document.body.scrollHeight
+            );
+            window.scrollTo({ top: bottom, behavior: "smooth" });
+          });
+        }}
+        onPointerMove={(e) => {
+          if (!coarse || !dragRef.current) return;
+          const bb = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+          const vx = ((e.clientX - bb.left) / bb.width) * W;
+          const i = Math.floor((vx - PL) / slot);
+          if (i >= 0 && i < shown.length) setHover(i);
+        }}
+        onPointerUp={() => { dragRef.current = false; }}
+        onPointerCancel={() => { dragRef.current = false; }}
       >
         {yTicks.map((v, i) => (
           <g key={i}>
-            <line x1={PAD.l} x2={W - PAD.r} y1={yLine(v)} y2={yLine(v)} className="stroke-slate-200 dark:stroke-zinc-800" strokeWidth={1} />
-            <text x={PAD.l - 8} y={yLine(v) + 4} textAnchor="end" fontSize={11} className="fill-slate-400 dark:fill-zinc-500">
+            <line x1={PL} x2={W - PAD.r} y1={yLine(v)} y2={yLine(v)} className="stroke-slate-200 dark:stroke-zinc-800" strokeWidth={1} />
+            {/* PC axis numbers (unchanged). Mobile: bigger + white via CSS. */}
+            <text x={PL - 8} y={yLine(v) + 4} textAnchor="end" fontSize={11} className="fill-slate-400 dark:fill-zinc-500 ag-y">
               {compact(v)}
             </text>
           </g>
         ))}
         {minLine < 0 && maxLine > 0 && (
-          <line x1={PAD.l} x2={W - PAD.r} y1={zeroY} y2={zeroY} className="stroke-slate-300 dark:stroke-zinc-700" strokeWidth={1} strokeDasharray="4 3" />
+          <line x1={PL} x2={W - PAD.r} y1={zeroY} y2={zeroY} className="stroke-slate-300 dark:stroke-zinc-700" strokeWidth={1} strokeDasharray="4 3" />
         )}
         {empty ? (
           <text x={W / 2} y={H / 2} textAnchor="middle" fontSize={14} className="fill-slate-400 dark:fill-zinc-500">
@@ -375,25 +450,57 @@ export default function AccountsGraph({
                 ))}
               </g>
             )}
+            {/* Mobile: x labels rotate (bottom-to-top) so big text fits; PC stays horizontal. */}
             {tickIdx.map((i) => (
-              <text key={i} x={x(i)} y={labelY} textAnchor="middle" fontSize={11} className="fill-slate-400 dark:fill-zinc-500">
+              <text key={i} x={x(i)} y={labelY}
+                textAnchor={narrow ? "end" : "middle"}
+                transform={narrow ? `rotate(-90 ${x(i)} ${labelY})` : undefined}
+                fontSize={11} className="fill-slate-400 dark:fill-zinc-500 ag-x">
                 {shown[i].label}
               </text>
             ))}
             {shown.map((b, i) => (
-              <rect key={"hit" + b.key} x={PAD.l + slot * i} y={PAD.t} width={slot} height={barH + outZoneH} fill="transparent"
-                onMouseEnter={() => setHover(i)} onMouseMove={() => setHover(i)} />
+              <rect key={"hit" + b.key} x={PL + slot * i} y={PT} width={slot} height={barH + outZoneH} fill="transparent"
+                style={{ cursor: coarse ? "pointer" : "auto" }}
+                onMouseEnter={coarse ? undefined : () => setHover(i)}
+                onMouseMove={coarse ? undefined : () => setHover(i)} />
             ))}
             {hov && hover !== null && (
-              <g pointerEvents="none">
-                <line x1={x(hover)} x2={x(hover)} y1={PAD.t} y2={baseY + outZoneH} className="stroke-slate-300 dark:stroke-zinc-600" strokeWidth={1} />
+              <g pointerEvents="none" className="max-md:hidden">
+                <line x1={x(hover)} x2={x(hover)} y1={PT} y2={baseY + outZoneH} className="stroke-slate-300 dark:stroke-zinc-600" strokeWidth={1} />
                 <TipBox x={x(hover)} y={Math.min(yLine(hov.balance), baseY - hFlow(hov.inflow))} hov={hov} display={display} hasVat={hasVat} H={H} />
+              </g>
+            )}
+            {/* Mobile: crosshair line only (no in-SVG tooltip) — the detail
+                card renders below the graph as HTML. */}
+            {hov && hover !== null && (
+              <g pointerEvents="none" className="md:hidden">
+                <line x1={x(hover)} x2={x(hover)} y1={PT} y2={baseY + outZoneH} className="stroke-slate-300 dark:stroke-zinc-600" strokeWidth={1} />
               </g>
             )}
           </g>
         )}
-        <line x1={PAD.l} x2={W - PAD.r} y1={baseY} y2={baseY} className="stroke-slate-300 dark:stroke-zinc-700" strokeWidth={1} />
+        <line x1={PL} x2={W - PAD.r} y1={baseY} y2={baseY} className="stroke-slate-300 dark:stroke-zinc-700" strokeWidth={1} />
       </svg>
+      {/* Mobile detail card: full-width HTML readout for the tapped bar —
+          easier to read than the in-graph tooltip. PC untouched (hidden). */}
+      {hov && (
+        <div ref={detailRef} className="md:hidden mt-2 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 px-3 py-2.5">
+          <div className="text-sm font-semibold">{hov.fullLabel}</div>
+          <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+            <span className="text-slate-500 dark:text-zinc-400">In</span>
+            <span className="text-right font-semibold text-emerald-600 dark:text-emerald-400">{fmtMoney(hov.inflow, display)}</span>
+            <span className="text-slate-500 dark:text-zinc-400">Out</span>
+            <span className="text-right font-semibold text-rose-600 dark:text-rose-400">{fmtMoney(hov.outflow, display)}</span>
+            <span className="text-slate-500 dark:text-zinc-400">Balance</span>
+            <span className="text-right font-semibold text-sky-600 dark:text-sky-400">{fmtMoney(hov.balance, display)}</span>
+            {/* VAT row always renders (blank on Day/Month) so the card keeps a
+                constant height — switching modes never jumps the layout. */}
+            <span className="text-slate-500 dark:text-zinc-400">{hasVat ? "VAT" : ""}</span>
+            <span className="text-right font-semibold text-amber-600 dark:text-amber-400">{hasVat ? fmtMoney(hov.vat || 0, display) : ""}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

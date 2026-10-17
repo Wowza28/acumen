@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Shell from "@/components/Shell";
 import PageHeader from "@/components/PageHeader";
 import FileViewer from "@/components/FileViewer";
@@ -8,8 +8,6 @@ import { kindOf, fmtSize, FILE_TAGS, tagClasses } from "@/components/FileBits";
 import TagDropdown from "@/components/TagDropdown";
 import PdfCanvas from "@/components/PdfCanvas";
 import DocxView from "@/components/DocxView";
-
-const TYPE_FILTERS = ["all", "pdf", "doc", "sheet", "image", "text", "audio", "video", "file"] as const;
 
 // Mini spreadsheet preview for the card box: first rows of the first sheet,
 // letterboxed center like the other card previews.
@@ -100,10 +98,6 @@ function Thumb({ d }: { d: any }) {
 export default function FilesPage() {
   const [list, setList] = useState<any[]>([]);
   const [q, setQ] = useState("");
-  const [typeF, setTypeF] = useState<string>("all");
-  const [personF, setPersonF] = useState("");
-  const [projectF, setProjectF] = useState("");
-  const [tagF, setTagF] = useState<string>("all");
   const [sel, setSel] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
@@ -284,25 +278,20 @@ export default function FilesPage() {
     };
   }, []);
 
-  const people = useMemo(() => {
-    const m = new Map<string, string>();
-    list.forEach((d) => { if (d.contact) m.set(d.contact.id, d.contact.name); });
-    return Array.from(m.entries());
-  }, [list]);
-  const projects = useMemo(() => {
-    const m = new Map<string, string>();
-    list.forEach((d) => { if (d.project) m.set(d.project.id, d.project.title); });
-    return Array.from(m.entries());
-  }, [list]);
-
   const filtered = list.filter((d) => {
-    if (typeF !== "all" && kindOf(d.mime, d.filename) !== typeF) return false;
-    if (tagF !== "all" && (d.tag || "") !== tagF) return false;
-    if (personF && d.contactId !== personF) return false;
-    if (projectF && d.projectId !== projectF) return false;
     if (q) {
-      const s = q.toLowerCase();
-      if (!(d.filename.toLowerCase().includes(s) || (d.summary || "").toLowerCase().includes(s))) return false;
+      const s = q.trim().toLowerCase();
+      if (s) {
+        const hay = [
+          d.filename || "",
+          kindOf(d.mime, d.filename),
+          d.contact?.name || "",
+          d.project?.title || "",
+          d.tag || "",
+          d.summary || "",
+        ].join(" ").toLowerCase();
+        if (!hay.includes(s)) return false;
+      }
     }
     return true;
   });
@@ -320,66 +309,81 @@ export default function FilesPage() {
           <div className="card text-sm font-medium">Drop files to upload</div>
         </div>
       )}
-      <PageHeader icon="files" title="Files" count={filtered.length} right={
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1">
-            <input type="checkbox" checked={filtered.length > 0 && filtered.every((d) => checkedIds.has(d.id))}
-              onChange={toggleSelectAll} className="cbx" title="Select all shown files" aria-label="Select all shown files" />
-            <span className="text-[10px] text-slate-500 dark:text-zinc-400 whitespace-nowrap">Select All</span>
-          </span>
-          <input className="input !w-56" placeholder="Search filename…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <PageHeader icon="files" title="Files" count={filtered.length}
+        search={{ value: q, onChange: (v) => setQ(v), placeholder: "Search files, people, projects, tags…" }}
+        searchInputClass="input !w-56"
+        desktopClusterClass="hidden md:flex flex-wrap items-center gap-2"
+        mobileActionsClass="mt-2 flex flex-col gap-2 md:hidden"
+        actions={<>
           <input ref={fileRef} type="file" className="hidden" multiple onChange={upload} />
           {selectionMode ? (
             <>
-              <span className="text-xs text-slate-500 dark:text-zinc-400 whitespace-nowrap">{checkedIds.size} selected</span>
-              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected files to a person"
+              {/* Desktop bulk row: exact original markup so the PC layout is pixel-identical */}
+              <span className="text-xs text-slate-500 dark:text-zinc-400 whitespace-nowrap max-md:hidden">{checkedIds.size} selected</span>
+              <select className="input !w-auto !h-7 !py-0 text-xs max-md:hidden" value="" disabled={bulkBusy} title="Link selected files to a person"
                 onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("contactId", v); }}>
                 <option value="">Link Person…</option>
                 {peopleList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
-              <select className="input !w-auto !h-7 !py-0 text-xs" value="" disabled={bulkBusy} title="Link selected files to a project"
+              <select className="input !w-auto !h-7 !py-0 text-xs max-md:hidden" value="" disabled={bulkBusy} title="Link selected files to a project"
                 onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("projectId", v); }}>
                 <option value="">Link Project…</option>
                 {projectsList.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
               </select>
-              <TagDropdown options={FILE_TAGS} onSelect={bulkModifyTag}
-                placeholder="Modify Tag…" pillClass={tagClasses}
-                triggerClass="!w-auto !h-7 !py-0 text-xs" disabled={bulkBusy}
-                title="Applies the tag to all selected files — or removes it if every selected already has it" />
-              <button className="btn !h-7 !py-0 px-3 text-xs !bg-red-600 hover:!bg-red-700 !text-white" disabled={bulkBusy} onClick={bulkDelete} title="Delete selected files">
+              <span className="max-md:hidden">
+                <TagDropdown options={FILE_TAGS} onSelect={bulkModifyTag}
+                  placeholder="Modify Tag…" pillClass={tagClasses}
+                  triggerClass="!w-auto !h-7 !py-0 text-xs" disabled={bulkBusy}
+                  title="Applies the tag to all selected files — or removes it if every selected already has it" />
+              </span>
+              <button className="btn !h-7 !py-0 px-3 text-xs !bg-red-600 hover:!bg-red-700 !text-white max-md:hidden" disabled={bulkBusy} onClick={bulkDelete} title="Delete selected files">
                 {bulkBusy ? "Working…" : "Delete"}
               </button>
-              <button className="btn-ghost text-xs" disabled={bulkBusy} onClick={() => { setCheckedIds(new Set()); setBulkMsg(""); }} title="Clear selection">✕ Clear</button>
+              <button className="btn-ghost text-xs max-md:hidden" disabled={bulkBusy} onClick={() => { setCheckedIds(new Set()); setBulkMsg(""); }} title="Clear selection">✕ Clear</button>
+              {/* Mobile bulk column: full-width stacked controls */}
+              <span className="text-xs text-slate-500 dark:text-zinc-400 whitespace-nowrap text-center md:hidden">{checkedIds.size} selected</span>
+              <select className="input !w-full !h-7 !py-0 text-xs md:hidden" value="" disabled={bulkBusy} title="Link selected files to a person"
+                onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("contactId", v); }}>
+                <option value="">Link Person…</option>
+                {peopleList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <select className="input !w-full !h-7 !py-0 text-xs md:hidden" value="" disabled={bulkBusy} title="Link selected files to a project"
+                onChange={(e) => { const v = e.target.value; e.target.value = ""; bulkLink("projectId", v); }}>
+                <option value="">Link Project…</option>
+                {projectsList.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </select>
+              <span className="md:hidden">
+                <TagDropdown options={FILE_TAGS} onSelect={bulkModifyTag}
+                  placeholder="Modify Tag…" pillClass={tagClasses}
+                  triggerClass="!w-full !h-7 !py-0 text-xs" disabled={bulkBusy}
+                  title="Applies the tag to all selected files — or removes it if every selected already has it" />
+              </span>
+              <button className="btn !w-full !h-7 !py-0 px-3 text-xs !bg-red-600 hover:!bg-red-700 !text-white md:hidden" disabled={bulkBusy} onClick={bulkDelete} title="Delete selected files">
+                {bulkBusy ? "Working…" : "Delete"}
+              </button>
+              <button className="btn-ghost text-xs w-full rounded-xl border border-slate-200 dark:border-zinc-700 md:hidden" disabled={bulkBusy} onClick={() => { setCheckedIds(new Set()); setBulkMsg(""); }} title="Clear selection">Cancel</button>
             </>
           ) : (
-            <button className="btn !py-1.5 flex items-center gap-1.5" disabled={uploading} onClick={() => fileRef.current?.click()} title="Upload a file">
-              <IconUpload /> {uploading ? "Uploading…" : "Upload File"}
-            </button>
+            <>
+              <button className="btn !py-1.5 items-center gap-1.5 hidden md:flex" disabled={uploading} onClick={() => fileRef.current?.click()} title="Upload a file">
+                <IconUpload /> {uploading ? "Uploading…" : "Upload File"}
+              </button>
+              <button className="btn !py-1.5 w-full flex items-center justify-center gap-1.5 md:hidden" disabled={uploading} onClick={() => fileRef.current?.click()} title="Upload a file">
+                <IconUpload /> {uploading ? "Uploading…" : "Upload File"}
+              </button>
+            </>
           )}
-        </div>
-      } />
+        </>} />
       {!!bulkMsg && <div className="text-xs text-slate-500 dark:text-zinc-400 mb-2">{bulkMsg}</div>}
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        <select className="input !w-auto text-xs" value={typeF} onChange={(e) => setTypeF(e.target.value)}>
-          <option value="all">All types</option>
-          {TYPE_FILTERS.filter((t) => t !== "all").map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select className="input !w-auto text-xs" value={tagF} onChange={(e) => setTagF(e.target.value)}>
-          <option value="all">All tags</option>
-          <option value="">Untagged</option>
-          {FILE_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select className="input !w-auto text-xs" value={personF} onChange={(e) => setPersonF(e.target.value)}>
-          <option value="">All people</option>
-          {people.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-        </select>
-        <select className="input !w-auto text-xs" value={projectF} onChange={(e) => setProjectF(e.target.value)}>
-          <option value="">All projects</option>
-          {projects.map(([id, t]) => <option key={id} value={id}>{t}</option>)}
-        </select>
+      <div className="flex items-center gap-1.5 mb-3">
+        <input type="checkbox" checked={filtered.length > 0 && filtered.every((d) => checkedIds.has(d.id))}
+          onChange={toggleSelectAll} className="cbx" title="Select all shown files" aria-label="Select all shown files" />
+        <span className="text-[10px] text-slate-500 dark:text-zinc-400 whitespace-nowrap">Select All</span>
       </div>
-      {/* paperless-ngx style grid: up to 6 per row so detail lines fit fully */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      {/* paperless-ngx style grid: up to 6 per row so detail lines fit fully.
+          Mobile-only override below (globals.css): 1 column in portrait,
+          2 columns in landscape. Desktop (md+) untouched. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 files-grid">
         {filtered.map((d) => {
           const checked = checkedIds.has(d.id);
           return (

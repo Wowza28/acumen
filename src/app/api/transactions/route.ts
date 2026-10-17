@@ -4,7 +4,10 @@ import { prisma } from "@/lib/db";
 export async function GET() {
   try {
     const transactions = await prisma.transaction.findMany({
-      orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
+      // Latest-first ledger: dates desc, and same-day rows in reverse CSV
+      // order (the day's last statement row is the "latest" transaction).
+      // id desc is the fallback for legacy rows imported before `seq` existed.
+      orderBy: [{ transactionDate: "desc" }, { seq: "desc" }, { id: "desc" }],
       take: 5000,
     });
     return NextResponse.json(transactions);
