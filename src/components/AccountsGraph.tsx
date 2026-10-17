@@ -343,8 +343,15 @@ export default function AccountsGraph({
 
   return (
     <div className="w-full select-none accounts-graph">
-      {!empty && (
-        <div className="accounts-legend flex flex-wrap items-center gap-x-5 gap-y-1 px-1 pb-2 text-xs text-slate-500 dark:text-zinc-400">
+      {/* Empty state: plain HTML at normal text size — no tiny in-SVG text,
+          no floating zero-axis. */}
+      {empty ? (
+        <div className="py-8 text-center text-sm text-slate-400 dark:text-zinc-500">
+          No transactions yet – upload a statement to see the graph.
+        </div>
+      ) : (
+      <>
+      <div className="accounts-legend flex flex-wrap items-center gap-x-5 gap-y-1 px-1 pb-2 text-xs text-slate-500 dark:text-zinc-400">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500/80" /> Inflow
           </span>
@@ -364,7 +371,6 @@ export default function AccountsGraph({
           {/* PC caption (unchanged). Mobile captions removed — not needed. */}
           <span className="ml-auto max-md:hidden">All values in {display}</span>
         </div>
-      )}
       <svg
         viewBox={`0 0 ${W} ${H}`}
         style={{ width: "100%", height: "auto", display: "block", touchAction: "pan-y" }}
@@ -411,11 +417,7 @@ export default function AccountsGraph({
         {minLine < 0 && maxLine > 0 && (
           <line x1={PL} x2={W - PAD.r} y1={zeroY} y2={zeroY} className="stroke-slate-300 dark:stroke-zinc-700" strokeWidth={1} strokeDasharray="4 3" />
         )}
-        {empty ? (
-          <text x={W / 2} y={H / 2} textAnchor="middle" fontSize={14} className="fill-slate-400 dark:fill-zinc-500">
-            No transactions yet - upload a statement to see the graph.
-          </text>
-        ) : (
+        {(
           <g>
             {shown.map((b, i) => {
               const cx = x(i);
@@ -500,6 +502,8 @@ export default function AccountsGraph({
             <span className="text-right font-semibold text-amber-600 dark:text-amber-400">{hasVat ? fmtMoney(hov.vat || 0, display) : ""}</span>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

@@ -470,8 +470,6 @@ function MobileEventsView({ events, byDay, todayKey, onSelect, onCreateAt, load,
     scrollPanelToCenter();
   };
 
-  if (err) return <div className="p-4 text-sm text-red-500">{err}</div>;
-
   return (
     <Shell wide>
       {/* Sticky header pinned to top - full width background, single line */}
@@ -496,6 +494,10 @@ function MobileEventsView({ events, byDay, todayKey, onSelect, onCreateAt, load,
           </div>
         </div>
       </div>
+
+      {/* Error (e.g. no Titan account) shows as a banner ABOVE the calendar —
+          the header, hamburger, month list and all buttons stay interactive. */}
+      {err && <div className="mt-2 card text-sm text-red-500">{err}</div>}
 
       {/* Scrollable month panel - fills remaining screen height */}
       <div ref={panelRef} className="h-[calc(100vh-112px)] overflow-y-auto overflow-x-hidden">
