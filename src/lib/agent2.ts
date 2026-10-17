@@ -1,7 +1,12 @@
 import { prisma } from "./db";
 import { embedTexts, cosine } from "./rag";
 
-// --- date helpers: ground relative dates to NOW, reject junk years ---
+/**
+ * Lenient date parser for agent tool args. Handles "today"/"tomorrow"/ISO
+ * strings; rejects template junk ("[insert...]"). Stale past years are bumped
+ * to the current year to counter model hallucinations. Returns undefined
+ * (never throws) so tools can report "couldn't read the date" cleanly.
+ */
 export function parseDateInput(raw?: string): Date | undefined {
   if (!raw) return undefined;
   const s = raw.trim();

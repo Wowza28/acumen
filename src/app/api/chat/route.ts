@@ -6,6 +6,10 @@ import { TOOLS } from "@/lib/tools";
 import { toolCreateContact, toolSearchContacts, toolUpdateContact, toolDeleteContact, toolCreateProject, toolSearchProjects, toolUpdateProject, toolAddNote, toolUpdateNote, toolLinkDoc, toolLinkEvent, toolSummarizeFile } from "@/lib/crm";
 import { toolCreateTask, toolUpdateTask, toolCompleteTask, toolGetNote, toolGetTask, toolListItems, toolAskKb, toolDraftEmail, toolCreateEvent, toolUpdateEvent } from "@/lib/agent2";
 
+// POST /api/chat { messages, chatId?, provider? } -> { reply, actions, chatId }.
+// Agent loop: persist the user turn, run the model with TOOLS (≤6 tool rounds,
+// one write-tool execution per name per turn), then persist the assistant
+// reply. Turns that used ask_kb re-query with SMART_MODEL for the final answer.
 async function runTool(name: string, args: any, historyText?: string): Promise<string> {
   if (name === "create_contact") return toolCreateContact(args);
   if (name === "search_contacts") return toolSearchContacts(args);

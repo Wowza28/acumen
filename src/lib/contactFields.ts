@@ -91,28 +91,6 @@ export async function addContactFields(
   return { emailsAdded, phonesAdded };
 }
 
-/** Ensure exactly one default per kind (or none if empty), then sync columns. */
-export async function normalizeDefaults(contactId: string) {
-  for (const model of [prisma.contactEmail, prisma.contactPhone]) {
-    const rows = await (model as any).findMany({
-      where: { contactId },
-      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }]
-    });
-    const defCount = rows.filter((r: any) => r.isDefault).length;
-    if (defCount > 1) {
-      let kept = false;
-      for (const r of rows) {
-        if (r.isDefault && !kept) { kept = true; continue; }
-        if (r.isDefault) await (model as any).update({ where: { id: r.id }, data: { isDefault: false } });
-      }
-    } else if (defCount === 0 && rows.length) {
-      await (model as any).update({ where: { id: rows[0].id }, data: { isDefault: true } });
-    }
-  }
-  await syncDefaultEmail(contactId);
-  await syncDefaultPhone(contactId);
-}
-
 /**
  * Backfill legacy single email/phone into the new tables for contacts that
  * predate multi-value support. Safe to call repeatedly.

@@ -1,5 +1,7 @@
-import { z } from "zod";
-
+// OpenAI function-calling tool schemas for the chat agent loop
+// (POST /api/chat). Each entry's `name` maps to an implementation in
+// runTool(): crm.ts (contacts/projects/notes/docs/events) or agent2.ts
+// (tasks/list/ask_kb/email/calendar). Keep names stable — the model emits them.
 export const TOOLS: any[] = [
   {
     type: "function",
@@ -389,5 +391,3 @@ export const TOOLS: any[] = [
     }
   }
 ];
-
-export const ToolArgs = z.object({}).passthrough();

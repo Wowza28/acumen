@@ -3,6 +3,12 @@ import { useEffect, useState } from "react";
 
 export type StagedFile = { file: File; id: string };
 
+/**
+ * Chat-composer attachment staging: picked/dropped files are held locally and
+ * uploaded to /api/docs/upload only when the message is sent (uploadAll),
+ * so abandoned picks never create Document rows. Also warns on page unload
+ * while files are staged.
+ */
 export default function useStagedFiles() {
   const [staged, setStaged] = useState<StagedFile[]>([]);
   const [dragOver, setDragOver] = useState(false);

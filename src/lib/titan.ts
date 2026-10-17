@@ -823,8 +823,3 @@ export async function findTitanEventByUid(query: string): Promise<{ event: Titan
   }
   return null;
 }
-
-/** Backwards-compatible helper: events within ±days of now. */
-export async function fetchTitanCalendar(daysPast = 30, daysFuture = 60): Promise<TitanEvent[]> {
-  return fetchTitanEvents(new Date(Date.now() - daysPast * 86400000), new Date(Date.now() + daysFuture * 86400000));
-}

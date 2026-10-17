@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOpenAI } from "@/lib/openai";
 
+// POST /api/voice/speak { text, voice? } -> audio/mpeg (OpenAI tts-1, ≤4000 chars).
 export async function POST(req: NextRequest) {
   try {
     const { text, voice } = await req.json();

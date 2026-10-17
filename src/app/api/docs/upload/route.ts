@@ -4,6 +4,10 @@ import { chunkText, embedTexts } from "@/lib/rag";
 import fs from "fs/promises";
 import path from "path";
 
+// POST /api/docs/upload (multipart `file`, optional contact_name/project_title).
+// Saves to UPLOAD_DIR, extracts text (pdf/docx/plaintext), embeds chunks for
+// RAG, and suggests links by name match. Summarization is on-demand only
+// (chat summarize_file) — nothing is summarized at upload time.
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();

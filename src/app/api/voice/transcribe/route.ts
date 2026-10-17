@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOpenAI } from "@/lib/openai";
 
+// POST /api/voice/transcribe (multipart `audio`) -> { text }. Mic audio is
+// transcribed with OpenAI whisper-1; used by the chat VoiceButton.
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
