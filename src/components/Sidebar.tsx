@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { IconHome, IconPeople, IconProject, IconMeeting, IconTask, IconNote, IconFile, IconAccounts, IconChat, IconSun, IconMoon, IconDots, IconSettings } from "@/components/icons";
@@ -17,6 +18,8 @@ const NAV = [
 ];
 
 export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   const pathname = usePathname();
   const [chats, setChats] = useState<any[] | null>(null);
   const [theme, setTheme] = useState("dark");
@@ -59,7 +62,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     try { localStorage.setItem("theme", next); } catch {}
   }
 
-  return (
+  const aside = (
     <aside className="w-64 shrink-0 h-screen sticky top-0 flex flex-col border-r border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900">
       <div className="p-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-0.5 text-2xl tracking-[0.15em] font-thin"><span className="text-brand-500 dark:text-brand-400 text-2xl">&#923;</span>CUMEN</Link>
@@ -121,7 +124,11 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <IconSettings /><span>Settings</span>
         </button>
       </div>
-      {settingsOpen && <Settings onClose={() => setSettingsOpen(false)} />}
     </aside>
   );
+  return (
+    <>
+      {aside}
+    {settingsOpen && mounted && createPortal(<Settings onClose={() => setSettingsOpen(false)} />, document.body)}
+  </>);
 }

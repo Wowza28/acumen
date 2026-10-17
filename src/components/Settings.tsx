@@ -12,6 +12,7 @@ type SettingsTab = "general" | "assistant" | "accounts";
  */
 export default function Settings({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<SettingsTab>("general");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -30,14 +31,41 @@ export default function Settings({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-black/80" onClick={onClose} aria-hidden />
       <div className="relative w-full max-w-[1000px] bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[754px] max-h-[90vh] max-md:h-[92dvh] max-md:max-h-[92dvh] max-md:rounded-xl" role="dialog" aria-label="Settings">
         <div className="flex items-center justify-between px-6 max-md:px-4 py-4 max-md:py-3 border-b border-slate-100 dark:border-zinc-800 shrink-0 bg-white dark:bg-zinc-900">
-          <h2 className="text-base font-semibold">Settings</h2>
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Mobile-only hamburger: tab list lives here so more tabs can be
+                added later without crowding the header. Desktop keeps the rail. */}
+            <div className="relative md:hidden shrink-0">
+              <button className="icon-btn" title="Settings sections" aria-label="Settings sections"
+                aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>☰</button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
+                  <div className="absolute left-0 top-full mt-1 z-20 card !p-1 min-w-[140px]">
+                    {tabs.map((t) => (
+                      <button key={t.id} onClick={() => { setTab(t.id); setMenuOpen(false); }}
+                        className={`btn-ghost w-full text-left text-sm ${tab === t.id ? "navitem-active" : ""}`}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold leading-tight">Settings</h2>
+              {/* Mobile-only current-tab label under the title (desktop shows the rail). */}
+              <div className="hidden max-md:block text-xs text-slate-400 dark:text-zinc-500 leading-tight">
+                {tabs.find((t) => t.id === tab)?.label}
+              </div>
+            </div>
+          </div>
           <button className="icon-btn" onClick={onClose} title="Close"><IconX /></button>
         </div>
         <div className="flex flex-1 min-h-0 max-md:flex-col">
-          <nav className="w-48 max-md:w-full shrink-0 border-r max-md:border-r-0 max-md:border-b border-slate-100 dark:border-zinc-800 p-3 max-md:p-2 flex max-md:flex-row flex-col gap-1 bg-slate-50 dark:bg-zinc-950">
+          <nav className="w-48 max-md:hidden shrink-0 border-r border-slate-100 dark:border-zinc-800 p-3 flex flex-col gap-1 bg-slate-50 dark:bg-zinc-950">
             {tabs.map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`text-left max-md:text-center max-md:flex-1 px-3 max-md:px-2 py-2 rounded-xl text-sm ${tab === t.id ? "navitem-active" : "navitem"}`}>
+                className={`text-left px-3 py-2 rounded-xl text-sm ${tab === t.id ? "navitem-active" : "navitem"}`}>
                 {t.label}
               </button>
             ))}
