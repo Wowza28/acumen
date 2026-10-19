@@ -13,6 +13,7 @@ export const TRANSACTION_TAGS = [
   "Salary",
   "Parking",
   "Transfer",
+  "Tax",
 ] as const;
 export type TransactionTag = (typeof TRANSACTION_TAGS)[number];
 
@@ -60,6 +61,8 @@ export function transactionTagClasses(tag: string): string {
       return "bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/30";
     case "Transfer":
       return "bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-500/15 dark:text-slate-300 dark:border-slate-500/30";
+    case "Tax":
+      return "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700";
     default:
       return "";
   }

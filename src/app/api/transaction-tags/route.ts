@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 
 const ALLOWED = new Set([
   "Revenue", "Fees", "Project", "Expense", "Food", "Fuel", "Salary", "Parking", "Transfer",
+  "Tax",
 ]);
 
 function cleanTags(v: unknown): string[] | null {

@@ -10,6 +10,7 @@ import AccountsGraph, { buildBuckets, type DisplayCurrency, type GraphMode, type
 import { TRANSACTION_TAGS, parseTransactionTags, transactionTagClasses } from "@/components/TransactionTags";
 import TagDropdown from "@/components/TagDropdown";
 import TransactionDrawer from "@/components/TransactionDrawer";
+import Metrics from "@/components/Metrics";
 
 
 
@@ -31,6 +32,8 @@ function matchesSearch(t: Transaction, q: string) {
   const ql = query.toLowerCase();
   if ((t.description || "").toLowerCase().includes(ql)) return true;
   if (parseTransactionTags(t.tags).some((tag) => tag.toLowerCase().includes(ql))) return true;
+  // "untagged" matches transactions that carry no tags at all.
+  if (ql === "untagged") return parseTransactionTags(t.tags).length === 0;
   const num = Number(query.replace(/,/g, ""));
   if (query !== "" && Number.isFinite(num) && Math.abs(Number(t.amount) - num) <= 100) return true;
   if (dateLabel(t.transactionDate).toLowerCase().includes(ql)) return true;
@@ -44,7 +47,7 @@ export default function AccountsPage() {
   const [dateSort, setDateSort] = useState<"desc" | "asc">("desc");
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
-  const [tab, setTab] = useState<"tx" | "graph" | "vat">("graph");
+  const [tab, setTab] = useState<"tx" | "graph" | "vat" | "metrics">("graph");
   const [mode, setMode] = useState<GraphMode>("month");
   const [display, setDisplay] = useState<DisplayCurrency>("AED");
   const [rate, setRate] = useState(3.67);
@@ -333,7 +336,7 @@ export default function AccountsPage() {
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} aria-hidden />
                 <div className="absolute right-0 top-full mt-1 z-30 card !p-1 min-w-[170px]">
-                  {([["graph", "Summary"], ["tx", "Transactions"], ["vat", "VAT"]] as const).map(([id, label]) => (
+                  {([["graph", "Summary"], ["tx", "Transactions"], ["vat", "VAT"], ["metrics", "Metrics"]] as const).map(([id, label]) => (
                     <button key={id}
                       className={`btn-ghost w-full text-left text-xs ${tab === id ? "navitem-active font-semibold" : ""}`}
                       onClick={() => { setTab(id); setMenuOpen(false); }}>
@@ -356,12 +359,13 @@ export default function AccountsPage() {
           the text-lg page title; light theme falls back to near-black so it
           stays readable on white. */}
       <div className="md:hidden text-2xl font-semibold uppercase tracking-wide text-slate-900 dark:text-white -mt-1 mb-3">
-        {tab === "graph" ? "Summary" : tab === "tx" ? "Transactions" : "VAT"}
+        {tab === "graph" ? "Summary" : tab === "tx" ? "Transactions" : tab === "metrics" ? "Metrics" : "VAT"}
       </div>
       <div className="mb-4 flex items-center gap-1 max-md:hidden">
         <button className={`tab-btn ${tab === "graph" ? "tab-btn-active" : ""}`} onClick={() => setTab("graph")}>Summary</button>
         <button className={`tab-btn ${tab === "tx" ? "tab-btn-active" : ""}`} onClick={() => setTab("tx")}>Transactions</button>
         <button className={`tab-btn ${tab === "vat" ? "tab-btn-active" : ""}`} onClick={() => setTab("vat")}>VAT</button>
+        <button className={`tab-btn ${tab === "metrics" ? "tab-btn-active" : ""}`} onClick={() => setTab("metrics")}>Metrics</button>
       </div>
       {message && <div className="mb-3 text-sm text-slate-500 dark:text-zinc-400">{message}</div>}
       {tab === "graph" ? (
@@ -498,10 +502,12 @@ export default function AccountsPage() {
         <ExclusionSection side="inflow" title="Inflow Exclusions" hint="Matching credits are left out of VAT." exclusions={exclusions} onChanged={loadExclusions} />
         <ExclusionSection side="outflow" title="Outflow Exclusions" hint="Matching debits are left out of VAT." exclusions={exclusions} onChanged={loadExclusions} />
       </div>
+      ) : tab === "metrics" ? (
+      <Metrics transactions={transactions} display={display} rate={rate} vatExclusions={activeRules} />
       ) : (
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2 max-md:flex-col max-md:items-stretch">
-          <input className="input max-w-md flex-1 min-w-[240px] max-md:max-w-none" placeholder="Search description, tag, amount (±100), or date (e.g. Jun 30, 2026)…"
+          <input className="input max-w-md flex-1 min-w-[240px] max-md:max-w-none" placeholder="Search description, tag, amount (±100), date, or 'untagged'…"
             value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search transactions" />
           {!!checkedIds.size && (
             <>

@@ -117,6 +117,44 @@ export async function POST(req: NextRequest) {
     const result = fresh.length
       ? await prisma.transaction.createMany({ data: fresh.map((r, i) => ({ ...r, seq: baseSeq + i })) })
       : { count: 0 };
+
+    // Auto-tag: a newly imported transaction inherits the tags of any existing
+    // transaction with the exact same description, so same-description rows stay
+    // categorized without the user re-tagging every import.
+    if (fresh.length && result.count) {
+      const parseStoredTags = (raw?: string | null): string[] => {
+        if (!raw) return [];
+        try {
+          const v = JSON.parse(raw);
+          return Array.isArray(v) ? v.filter((t): t is string => typeof t === "string") : [];
+        } catch { return []; }
+      };
+      const freshDescriptions = [...new Set(fresh.map((r) => r.description))];
+      const created = await prisma.transaction.findMany({
+        where: { seq: { gte: baseSeq, lte: baseSeq + fresh.length - 1 } },
+        select: { description: true },
+      });
+      const sources = await prisma.transaction.findMany({
+        where: { description: { in: freshDescriptions } },
+        select: { description: true, tags: true },
+      });
+      const tagMap = new Map<string, string[]>();
+      for (const s of sources) {
+        const tags = parseStoredTags(s.tags);
+        if (tags.length && !tagMap.has(s.description)) tagMap.set(s.description, tags);
+      }
+      const taggedDescriptions = new Set<string>();
+      for (const c of created) if (tagMap.has(c.description)) taggedDescriptions.add(c.description);
+      for (const desc of taggedDescriptions) {
+        await prisma.transaction.updateMany({
+          where: {
+            description: desc,
+            seq: { gte: baseSeq, lte: baseSeq + fresh.length - 1 },
+          },
+          data: { tags: JSON.stringify(tagMap.get(desc)) },
+        });
+      }
+    }
     return NextResponse.json({ imported: result.count, skipped, duplicates });
   } catch (e: any) {
     console.error("[transactions/import]", e);
