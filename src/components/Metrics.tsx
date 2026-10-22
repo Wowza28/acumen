@@ -188,8 +188,11 @@ function NetFlows({ buckets, display, gran, withYear, className = "" }: { bucket
   const scale = plotH / 2 / maxAbs;
   const slotW = plotW / Math.max(n, 1);
   const barW = Math.max(3, Math.min(slotW * 0.62, 30));
-  // Flat label widths at font 16 (incl. gap) → thin to as many as fit.
-  const effW = gran === "day" ? 26 : withYear ? 70 : 34;
+  // Flat label widths at desktop font 16 (incl. gap) → thin to as many as fit.
+  // Mobile-only: axis text matches the Financials/Summary graphs (same
+  // rendered size and colour), which on this narrower canvas means smaller
+  // viewBox fonts — so the thinning estimate scales down too.
+  const effW = (gran === "day" ? 26 : withYear ? 70 : 34) * (narrow ? 12 / 16 : 1);
   const step = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(plotW / effW))));
   // Hover tooltip for the slot under the cursor.
   const hov = hover !== null && hover >= 0 && hover < n ? buckets[hover] : null;
@@ -240,7 +243,10 @@ function NetFlows({ buckets, display, gran, withYear, className = "" }: { bucket
               <line x1={PL} x2={W - PR} y1={y} y2={y} strokeWidth={1}
                 className={f === 0 ? "stroke-slate-300 dark:stroke-zinc-700" : "stroke-slate-200/60 dark:stroke-zinc-800/60"}
                 strokeDasharray={f === 0 ? "4 3" : undefined} />
-              <text x={PL - 8} y={y + 4} textAnchor="end" fontSize={narrow ? 14 : 12} className="fill-slate-500 dark:fill-zinc-400">{axisMoney(maxAbs * f)}</text>
+              {/* Mobile-only: match the Financials/Summary axis look — this canvas is
+                  narrower (480px), so smaller viewBox fonts (10/12) render at
+                  the same size, and slate-400/zinc-500 for the same colour. */}
+              <text x={PL - 8} y={y + 4} textAnchor="end" fontSize={narrow ? 10 : 12} className={narrow ? "fill-slate-400 dark:fill-zinc-500" : "fill-slate-500 dark:fill-zinc-400"}>{axisMoney(maxAbs * f)}</text>
             </g>
           );
         })}
@@ -262,7 +268,7 @@ function NetFlows({ buckets, display, gran, withYear, className = "" }: { bucket
           if (i % step !== 0 && i !== n - 1) return null;
           const cx = PL + slotW * (i + 0.5);
           return (
-            <text key={b.key} x={cx} y={H - PB + 18} textAnchor="middle" fontSize={narrow ? 16 : 14} className="fill-slate-500 dark:fill-zinc-400">{b.label}</text>
+            <text key={b.key} x={cx} y={H - PB + 18} textAnchor="middle" fontSize={narrow ? 12 : 14} className={narrow ? "fill-slate-400 dark:fill-zinc-500" : "fill-slate-500 dark:fill-zinc-400"}>{b.label}</text>
           );
         })}
         {/* Full-slot hit areas: hovering anywhere in a column shows its value. */}
